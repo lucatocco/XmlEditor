@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="docGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#1976D2"/>
+      <stop offset="100%" stop-color="#0D47A1"/>
+    </linearGradient>
+    <linearGradient id="foldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#0D47A1"/>
+      <stop offset="100%" stop-color="#082e73"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Documento (sagoma con angolo ripiegato) -->
+  <path d="M9 3 L43 3 L55 15 L55 61 L9 61 Z" fill="url(#docGrad)" rx="3"/>
+
+  <!-- Angolo ripiegato -->
+  <path d="M43 3 L55 15 L43 15 Z" fill="url(#foldGrad)"/>
+  <path d="M43 3 L43 15 L55 15" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.8"/>
+
+  <!-- Righe di codice decorative (sopra) -->
+  <rect x="15" y="21" width="22" height="2.5" rx="1.2" fill="rgba(255,255,255,0.30)"/>
+  <rect x="15" y="26" width="16" height="2.5" rx="1.2" fill="rgba(255,255,255,0.20)"/>
+
+  <!-- Simbolo XML  &lt;/&gt;  in arancione al centro -->
+  <text x="32" y="43"
+        font-family="DejaVu Sans Mono, Courier New, monospace"
+        font-weight="bold"
+        font-size="15"
+        fill="#FFB300"
+        text-anchor="middle">&lt;/&gt;</text>
+
+  <!-- Righe di codice decorative (sotto) -->
+  <rect x="15" y="49" width="18" height="2.5" rx="1.2" fill="rgba(255,255,255,0.20)"/>
+  <rect x="15" y="54" width="24" height="2.5" rx="1.2" fill="rgba(255,255,255,0.15)"/>
+</svg>

@@ -1,0 +1,58 @@
+/* ─────────────────────────────────────────────
+   XML Editor — Touch Informatica
+   editor.css  — system colors
+   ───────────────────────────────────────────── */
+
+/* ── EDITOR (RichTextFX CodeArea) ── */
+.xml-code-area {
+    -fx-font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", "DejaVu Sans Mono", "Courier New", monospace;
+    -fx-font-size: 13px;
+}
+
+/* Numerazione righe */
+.lineno {
+    -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", "Courier New", monospace;
+    -fx-font-size: 12px;
+    -fx-padding: 0 8 0 4;
+}
+
+/* ── SYNTAX HIGHLIGHTING ── */
+.xml-tag        { -fx-fill: #0050a0; }
+.xml-attr-name  { -fx-fill: #007000; }
+.xml-attr-value { -fx-fill: #a03000; }
+.xml-comment    { -fx-fill: #808080; -fx-font-style: italic; }
+.xml-cdata      { -fx-fill: #005050; }
+.xml-decl       { -fx-fill: #6000a0; }
+.xml-text       { -fx-fill: inherit; }
+
+/* ── LOG ── */
+.log-area {
+    -fx-font-family: "JetBrains Mono", "DejaVu Sans Mono", "Courier New", monospace;
+    -fx-font-size: 12px;
+}
+
+/* ── STATUS BAR ── */
+.status-bar {
+    -fx-padding: 3 10;
+}
+
+.status-label {
+    -fx-font-size: 12px;
+}
+
+/* ── PANEL TITLE ── */
+.panel-title {
+    -fx-font-weight: bold;
+    -fx-padding: 4 8;
+    -fx-max-width: Infinity;
+}
+
+/* ── SPLITPANE ── */
+.split-pane {
+    -fx-padding: 0;
+}
+
+/* ── TAB CONTENT ── */
+.tab-pane .tab-content-area {
+    -fx-padding: 0;
+}
