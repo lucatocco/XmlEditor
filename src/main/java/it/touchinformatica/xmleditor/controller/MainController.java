@@ -4,9 +4,11 @@ import it.touchinformatica.xmleditor.model.XmlDocument;
 import it.touchinformatica.xmleditor.service.XmlService;
 import it.touchinformatica.xmleditor.util.LastPositionManager;
 import it.touchinformatica.xmleditor.util.RecentFilesManager;
+import it.touchinformatica.xmleditor.util.XsdFolderManager;
 import it.touchinformatica.xmleditor.view.*;
 import javafx.application.Platform;
 import javafx.scene.control.*;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
@@ -33,6 +35,7 @@ public class MainController {
     private final StatusBar            statusBar;
     private final Consumer<List<Path>> refreshRecentMenu;
     private final Consumer<String>     updateTabTitle;
+    private final XsdFolderManager     xsdFolderMgr;
 
     private XmlDocument currentDoc;
     private Path        currentXsdPath;
@@ -40,6 +43,7 @@ public class MainController {
 
     public MainController(XmlService xmlService,
                           RecentFilesManager recentMgr,
+                          XsdFolderManager xsdFolderMgr,
                           EditorPane editorPane,
                           TreePane treePane,
                           LogPane logPane,
@@ -49,6 +53,7 @@ public class MainController {
         this.xmlService        = xmlService;
         this.recentMgr         = recentMgr;
         this.lastPosMgr        = new LastPositionManager();
+        this.xsdFolderMgr      = xsdFolderMgr;
         this.editorPane        = editorPane;
         this.treePane          = treePane;
         this.logPane           = logPane;
@@ -223,32 +228,92 @@ public class MainController {
     // XSD
     // ──────────────────────────────────────────────
 
+    /**
+     * Imposta la cartella globale degli XSD (persiste tra sessioni).
+     * Mostra un DirectoryChooser; se la cartella era già impostata la usa come punto di partenza.
+     */
+    public void setXsdFolder() {
+        DirectoryChooser dc = new DirectoryChooser();
+        dc.setTitle("Seleziona cartella XSD");
+        xsdFolderMgr.getXsdFolder().ifPresent(f -> dc.setInitialDirectory(f.toFile()));
+        File dir = dc.showDialog(null);
+        if (dir == null) return;
+        xsdFolderMgr.setXsdFolder(dir.toPath());
+        int count = xsdFolderMgr.listAvailableSchemas().size();
+        logPane.log("Cartella XSD impostata: " + dir.getAbsolutePath()
+            + "  (" + count + " schema/i trovati)", "ok");
+        statusBar.setStatus("Cartella XSD: " + dir.getName() + " (" + count + " XSD)");
+    }
+
+    /**
+     * Carica un singolo XSD manualmente (override puntuale rispetto alla cartella).
+     * Il file selezionato ha priorità sulla cartella per la sessione corrente.
+     */
     public void loadXsd() {
         FileChooser fc = new FileChooser();
         fc.setTitle("Carica schema XSD");
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("Schema XSD", "*.xsd"));
+        xsdFolderMgr.getXsdFolder().ifPresent(f -> fc.setInitialDirectory(f.toFile()));
         File file = fc.showOpenDialog(null);
         if (file == null) return;
         currentXsdPath = file.toPath();
-        logPane.log("Schema XSD caricato: " + file.getName(), "ok");
+        logPane.log("Schema XSD caricato manualmente: " + file.getName(), "ok");
         statusBar.setStatus("XSD: " + file.getName());
     }
 
     public void validate() {
-        if (currentXsdPath == null) {
-            logPane.log("Nessuno schema XSD caricato. Usa 'Carica XSD' prima.", "warn");
+        // 1. Priorità allo schema caricato manualmente in questa sessione
+        Path xsdToUse = currentXsdPath;
+
+        // 2. Se non c'è, cerca nella cartella XSD configurata
+        if (xsdToUse == null && xsdFolderMgr.isConfigured()) {
+            String xmlFileName = (currentDoc != null && currentDoc.getFilePath() != null)
+                ? currentDoc.getFileName() : null;
+
+            if (xmlFileName != null) {
+                // Cerca <nomeFile>.xsd
+                xsdToUse = xsdFolderMgr.findMatchingSchema(xmlFileName).orElse(null);
+
+                if (xsdToUse != null) {
+                    logPane.log("Schema trovato automaticamente: " + xsdToUse.getFileName(), "ok");
+                } else {
+                    // Nessuna corrispondenza diretta → mostra selettore tra gli XSD disponibili
+                    List<Path> available = xsdFolderMgr.listAvailableSchemas();
+                    if (available.isEmpty()) {
+                        logPane.log("Cartella XSD configurata ma non contiene file .xsd", "warn");
+                        return;
+                    }
+                    xsdToUse = showXsdPickerDialog(available);
+                    if (xsdToUse == null) return; // annullato dall'utente
+                }
+            } else {
+                // File senza nome (documento nuovo) → mostra selettore
+                List<Path> available = xsdFolderMgr.listAvailableSchemas();
+                if (!available.isEmpty()) {
+                    xsdToUse = showXsdPickerDialog(available);
+                    if (xsdToUse == null) return;
+                }
+            }
+        }
+
+        if (xsdToUse == null) {
+            logPane.log("Nessuno schema XSD disponibile. "
+                + "Usa 'Imposta cartella XSD' o 'Carica XSD' dal menu XML.", "warn");
             return;
         }
+
+        final Path finalXsd = xsdToUse;
         String content = editorPane.getText();
-        statusBar.setStatus("Validazione in corso…");
+        statusBar.setStatus("Validazione in corso con " + finalXsd.getFileName() + "…");
         Thread.ofVirtual().start(() -> {
-            XmlService.ValidationResult result = xmlService.validate(content, currentXsdPath);
+            XmlService.ValidationResult result = xmlService.validate(content, finalXsd);
             Platform.runLater(() -> {
                 if (result.valid()) {
-                    logPane.log("Documento XML valido secondo lo schema XSD", "ok");
+                    logPane.log("✔ Documento valido  [" + finalXsd.getFileName() + "]", "ok");
                     statusBar.setStatus("Validazione: OK ✔");
                 } else {
-                    logPane.log("Validazione fallita — " + result.errors().size() + " errore/i:", "error");
+                    logPane.log("Validazione fallita con [" + finalXsd.getFileName() + "] — "
+                        + result.errors().size() + " errore/i:", "error");
                     result.errors().forEach(err ->
                         logPane.log("  [" + (err.fatal() ? "FATALE" : "ERRORE") + "] "
                             + "Riga " + err.line() + ", Col " + err.column() + ": " + err.message(), "error")
@@ -260,6 +325,31 @@ public class MainController {
             });
         });
     }
+
+    /**
+     * Mostra un ChoiceDialog per scegliere tra gli XSD disponibili nella cartella.
+     * Chiamato quando non c'è corrispondenza automatica per nome.
+     *
+     * @return path scelto dall'utente, o null se ha annullato
+     */
+    private Path showXsdPickerDialog(List<Path> available) {
+        // Costruiamo le label mostrate all'utente (solo il nome file)
+        List<String> names = available.stream()
+            .map(p -> p.getFileName().toString())
+            .toList();
+
+        ChoiceDialog<String> dialog = new ChoiceDialog<>(names.get(0), names);
+        dialog.setTitle("Scegli schema XSD");
+        dialog.setHeaderText("Nessuno schema corrisponde automaticamente al file corrente.");
+        dialog.setContentText("Schema XSD da usare:");
+
+        return dialog.showAndWait()
+            .map(chosen -> available.get(names.indexOf(chosen)))
+            .orElse(null);
+    }
+
+    /** Ritorna la cartella XSD correntemente configurata (per la statusbar in MainStage). */
+    public XsdFolderManager getXsdFolderManager() { return xsdFolderMgr; }
 
     // ──────────────────────────────────────────────
     // VAI A RIGA

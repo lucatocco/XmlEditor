@@ -2,6 +2,7 @@ package it.touchinformatica.xmleditor.view;
 
 import it.touchinformatica.xmleditor.service.XmlService;
 import it.touchinformatica.xmleditor.util.RecentFilesManager;
+import it.touchinformatica.xmleditor.util.XsdFolderManager;
 import javafx.geometry.Orientation;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -28,6 +29,7 @@ public class MainStage {
     private final Stage            stage;
     private final XmlService       xmlService;
     private final RecentFilesManager recentMgr;
+    private final XsdFolderManager xsdFolderMgr;
     private final TabPane          tabPane;
     private final StatusBar        statusBar;
 
@@ -38,11 +40,12 @@ public class MainStage {
     }
 
     public MainStage(Stage stage, List<Path> initialFiles) {
-        this.stage      = stage;
-        this.xmlService = new XmlService();
-        this.recentMgr  = new RecentFilesManager();
-        this.statusBar  = new StatusBar();
-        this.tabPane    = new TabPane();
+        this.stage         = stage;
+        this.xmlService    = new XmlService();
+        this.recentMgr     = new RecentFilesManager();
+        this.xsdFolderMgr  = new XsdFolderManager();
+        this.statusBar     = new StatusBar();
+        this.tabPane       = new TabPane();
 
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.ALL_TABS);
 
@@ -66,7 +69,7 @@ public class MainStage {
     /** Crea un nuovo tab vuoto e lo seleziona */
     public EditorSession newTab() {
         EditorSession session = new EditorSession(
-            xmlService, recentMgr, this::refreshRecentMenu, statusBar
+            xmlService, recentMgr, xsdFolderMgr, this::refreshRecentMenu, statusBar
         );
         tabPane.getTabs().add(session.getTab());
         tabPane.getSelectionModel().select(session.getTab());
@@ -283,14 +286,23 @@ public class MainStage {
         menuVisualizza.getItems().addAll(miTabPrev, miTabNext, new SeparatorMenuItem(), miWrap, new SeparatorMenuItem(), menuEncoding);
 
         // ── XML ──
-        MenuItem miPretty  = menuItem("Pretty Print",  "Ctrl+P",  () -> withActive(s -> s.getController().prettyPrint()));
-        MenuItem miXsd     = menuItem("Carica XSD…",   null,      () -> withActive(s -> s.getController().loadXsd()));
-        MenuItem miValida  = menuItem("Valida XSD",    "Ctrl+E",  () -> withActive(s -> s.getController().validate()));
+        MenuItem miPretty     = menuItem("Pretty Print",        "Ctrl+P",  () -> withActive(s -> s.getController().prettyPrint()));
+        MenuItem miXsdFolder  = menuItem("Imposta cartella XSD…", null,    () -> withActive(s -> s.getController().setXsdFolder()));
+        MenuItem miXsd        = menuItem("Carica XSD singolo…",  null,      () -> withActive(s -> s.getController().loadXsd()));
+        MenuItem miValida     = menuItem("Valida XSD",           "Ctrl+E",  () -> withActive(s -> s.getController().validate()));
+        MenuItem miXsdInfo    = menuItem("Info cartella XSD",    null,      this::showXsdFolderInfo);
 
         Menu menuXml = new Menu("XML");
-        menuXml.getItems().addAll(miPretty, new SeparatorMenuItem(), miXsd, miValida);
+        menuXml.getItems().addAll(
+            miPretty,
+            new SeparatorMenuItem(),
+            miXsdFolder, miXsdInfo,
+            new SeparatorMenuItem(),
+            miXsd, miValida
+        );
 
         refreshRecentMenu(recentMgr.getRecentFiles());
+        updateXsdFolderStatus();
         return new MenuBar(menuFile, menuModifica, menuVisualizza, menuXml);
     }
 
@@ -361,6 +373,41 @@ public class MainStage {
         acc.put(new KeyCodeCombination(KeyCode.A, KeyCombination.CONTROL_DOWN),                             () -> withActive(s -> s.getEditorPane().selectAll()));
         acc.put(new KeyCodeCombination(KeyCode.TAB, KeyCombination.CONTROL_DOWN),                           this::selectNextTab);
         acc.put(new KeyCodeCombination(KeyCode.TAB, KeyCombination.CONTROL_DOWN, KeyCombination.SHIFT_DOWN),this::selectPrevTab);
+    }
+
+    // ──────────────────────────────────────────────
+    // XSD FOLDER INFO
+    // ──────────────────────────────────────────────
+
+    private void showXsdFolderInfo() {
+        if (!xsdFolderMgr.isConfigured()) {
+            Alert a = new Alert(Alert.AlertType.INFORMATION);
+            a.setTitle("Cartella XSD");
+            a.setHeaderText("Nessuna cartella XSD configurata");
+            a.setContentText("Usa 'Imposta cartella XSD…' dal menu XML per configurarla.");
+            a.showAndWait();
+            return;
+        }
+        var schemas = xsdFolderMgr.listAvailableSchemas();
+        String list = schemas.isEmpty()
+            ? "(nessun file .xsd trovato)"
+            : schemas.stream()
+                .map(p -> "  • " + p.getFileName())
+                .reduce("", (a, b) -> a + "\n" + b);
+
+        Alert a = new Alert(Alert.AlertType.INFORMATION);
+        a.setTitle("Cartella XSD");
+        a.setHeaderText("Cartella: " + xsdFolderMgr.getXsdFolder().orElseThrow());
+        a.setContentText(schemas.size() + " schema/i disponibili:" + list);
+        a.getDialogPane().setPrefWidth(520);
+        a.showAndWait();
+    }
+
+    private void updateXsdFolderStatus() {
+        xsdFolderMgr.getXsdFolder().ifPresent(f -> {
+            int n = xsdFolderMgr.listAvailableSchemas().size();
+            statusBar.setStatus("Cartella XSD: " + f.getFileName() + " (" + n + " XSD)");
+        });
     }
 
     // ──────────────────────────────────────────────

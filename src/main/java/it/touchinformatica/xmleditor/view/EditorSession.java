@@ -3,6 +3,7 @@ package it.touchinformatica.xmleditor.view;
 import it.touchinformatica.xmleditor.controller.MainController;
 import it.touchinformatica.xmleditor.service.XmlService;
 import it.touchinformatica.xmleditor.util.RecentFilesManager;
+import it.touchinformatica.xmleditor.util.XsdFolderManager;
 import javafx.geometry.Orientation;
 import javafx.scene.control.Tab;
 import javafx.scene.layout.BorderPane;
@@ -28,6 +29,7 @@ public class EditorSession {
 
     public EditorSession(XmlService xmlService,
                          RecentFilesManager recentMgr,
+                         XsdFolderManager xsdFolderMgr,
                          Consumer<List<Path>> refreshRecentMenu,
                          StatusBar sharedStatusBar) {
 
@@ -39,6 +41,7 @@ public class EditorSession {
         this.controller = new MainController(
             xmlService,
             recentMgr,
+            xsdFolderMgr,
             editorPane,
             treePane,
             logPane,
