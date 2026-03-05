@@ -267,32 +267,39 @@ public class MainController {
 
         // 2. Se non c'è, cerca nella cartella XSD configurata
         if (xsdToUse == null && xsdFolderMgr.isConfigured()) {
-            String xmlFileName = (currentDoc != null && currentDoc.getFilePath() != null)
-                ? currentDoc.getFileName() : null;
 
-            if (xmlFileName != null) {
-                // Cerca <nomeFile>.xsd
-                xsdToUse = xsdFolderMgr.findMatchingSchema(xmlFileName).orElse(null);
-
+            // 2a. Prova prima a leggere xsi:schemaLocation dal contenuto XML
+            String xmlContent = editorPane.getText();
+            String schemaLocationXsd = extractSchemaLocationFilename(xmlContent);
+            if (schemaLocationXsd != null) {
+                xsdToUse = xsdFolderMgr.findMatchingSchema(schemaLocationXsd).orElse(null);
                 if (xsdToUse != null) {
-                    logPane.log("Schema trovato automaticamente: " + xsdToUse.getFileName(), "ok");
-                } else {
-                    // Nessuna corrispondenza diretta → mostra selettore tra gli XSD disponibili
-                    List<Path> available = xsdFolderMgr.listAvailableSchemas();
-                    if (available.isEmpty()) {
-                        logPane.log("Cartella XSD configurata ma non contiene file .xsd", "warn");
-                        return;
+                    logPane.log("Schema trovato via schemaLocation: " + xsdToUse.getFileName(), "ok");
+                }
+            }
+
+            // 2b. Se non trovato via schemaLocation, cerca per nome file XML
+            if (xsdToUse == null) {
+                String xmlFileName = (currentDoc != null && currentDoc.getFilePath() != null)
+                    ? currentDoc.getFileName() : null;
+
+                if (xmlFileName != null) {
+                    xsdToUse = xsdFolderMgr.findMatchingSchema(xmlFileName).orElse(null);
+                    if (xsdToUse != null) {
+                        logPane.log("Schema trovato per nome file: " + xsdToUse.getFileName(), "ok");
                     }
-                    xsdToUse = showXsdPickerDialog(available);
-                    if (xsdToUse == null) return; // annullato dall'utente
                 }
-            } else {
-                // File senza nome (documento nuovo) → mostra selettore
+            }
+
+            // 2c. Nessuna corrispondenza automatica → mostra selettore
+            if (xsdToUse == null) {
                 List<Path> available = xsdFolderMgr.listAvailableSchemas();
-                if (!available.isEmpty()) {
-                    xsdToUse = showXsdPickerDialog(available);
-                    if (xsdToUse == null) return;
+                if (available.isEmpty()) {
+                    logPane.log("Cartella XSD configurata ma non contiene file .xsd", "warn");
+                    return;
                 }
+                xsdToUse = showXsdPickerDialog(available);
+                if (xsdToUse == null) return; // annullato dall'utente
             }
         }
 
@@ -350,6 +357,55 @@ public class MainController {
 
     /** Ritorna la cartella XSD correntemente configurata (per la statusbar in MainStage). */
     public XsdFolderManager getXsdFolderManager() { return xsdFolderMgr; }
+
+    /**
+     * Estrae il nome del file XSD dall'attributo xsi:schemaLocation del testo XML.
+     *
+     * <p>Gestisce entrambe le forme:</p>
+     * <ul>
+     *   <li>{@code schemaLocation="namespace schema.xsd"} (coppia namespace+location)</li>
+     *   <li>{@code noNamespaceSchemaLocation="schema.xsd"}</li>
+     * </ul>
+     *
+     * @param xmlContent testo XML completo
+     * @return solo il nome del file .xsd (es. "SEDANsfBlk.xsd"), o null se non trovato
+     */
+    private static String extractSchemaLocationFilename(String xmlContent) {
+        if (xmlContent == null || xmlContent.isBlank()) return null;
+
+        // Cerca solo nei primi 2000 caratteri (l'attributo è sempre nel tag radice)
+        String head = xmlContent.length() > 2000 ? xmlContent.substring(0, 2000) : xmlContent;
+
+        // 1. noNamespaceSchemaLocation="schema.xsd"
+        java.util.regex.Matcher m1 = java.util.regex.Pattern
+            .compile("noNamespaceSchemaLocation\\s*=\\s*[\"']([^\"']+)[\"']")
+            .matcher(head);
+        if (m1.find()) return filenameOnly(m1.group(1));
+
+        // 2. schemaLocation="ns1 file1.xsd ns2 file2.xsd ..." — prende tutti i token pari (le location)
+        java.util.regex.Matcher m2 = java.util.regex.Pattern
+            .compile("(?:xsi:)?schemaLocation\\s*=\\s*[\"']([^\"']+)[\"']")
+            .matcher(head);
+        if (m2.find()) {
+            String[] tokens = m2.group(1).trim().split("\\s+");
+            // I token sono coppie (namespace, location); le location sono agli indici dispari
+            for (int i = 1; i < tokens.length; i += 2) {
+                String loc = tokens[i];
+                if (loc.toLowerCase().endsWith(".xsd")) return filenameOnly(loc);
+            }
+            // Fallback: singolo token che finisce con .xsd (schemaLocation senza namespace)
+            for (String t : tokens) {
+                if (t.toLowerCase().endsWith(".xsd")) return filenameOnly(t);
+            }
+        }
+        return null;
+    }
+
+    /** Estrae solo il nome file da un path o URL (es. "path/to/schema.xsd" → "schema.xsd"). */
+    private static String filenameOnly(String pathOrUrl) {
+        int slash = Math.max(pathOrUrl.lastIndexOf('/'), pathOrUrl.lastIndexOf('\\'));
+        return slash >= 0 ? pathOrUrl.substring(slash + 1) : pathOrUrl;
+    }
 
     // ──────────────────────────────────────────────
     // VAI A RIGA

@@ -39,6 +39,18 @@
               <stripVersion>false</stripVersion>
             </configuration>
           </execution>
+          <execution>
+            <id>copy-classpath-libs</id>
+            <phase>package</phase>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/classpath-libs</outputDirectory>
+              <excludeGroupIds>org.openjfx</excludeGroupIds>
+              <stripVersion>false</stripVersion>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       <plugin>

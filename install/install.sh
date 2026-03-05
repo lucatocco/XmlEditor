@@ -59,14 +59,14 @@ success "Maven trovato"
 info "Compilazione del progetto…"
 cd "$PROJECT_DIR"
 # Rimuovi artefatti di build precedenti che potrebbero essere owned da root
-rm -f "target/${JAR_NAME}" target/original-*.jar target/maven-archiver/pom.properties 2>/dev/null || true
+rm -rf target/ 2>/dev/null || true
 # Esegui la build come utente originale (non root) per evitare
 # che i file in target/ diventino di proprietà di root
 BUILD_USER="${SUDO_USER:-$(logname 2>/dev/null || echo "$USER")}"
 if [ "$BUILD_USER" != "root" ] && [ -n "$BUILD_USER" ]; then
-    sudo -u "$BUILD_USER" mvn package -q -DskipTests
+    sudo -u "$BUILD_USER" mvn clean package -q -DskipTests
 else
-    mvn package -q -DskipTests
+    mvn clean package -q -DskipTests
 fi
 if [ ! -f "target/${JAR_NAME}" ]; then
     error "Build fallita: ${JAR_NAME} non trovato in target/"
@@ -88,20 +88,41 @@ mkdir -p "${INSTALL_DIR}/javafx-libs"
 cp target/javafx-libs/*.jar "${INSTALL_DIR}/javafx-libs/"
 success "Librerie JavaFX installate"
 
+# ── Installazione classpath JARs (reactfx, richtextfx, saxon, ecc.) ──────────
+info "Installazione librerie classpath (richtextfx, reactfx, …)…"
+if [ -d "target/classpath-libs" ] && [ -n "$(ls target/classpath-libs/*.jar 2>/dev/null)" ]; then
+    mkdir -p "${INSTALL_DIR}/classpath-libs"
+    cp target/classpath-libs/*.jar "${INSTALL_DIR}/classpath-libs/"
+    success "Librerie classpath installate"
+else
+    warn "target/classpath-libs vuota o assente — possibile errore a runtime con richtextfx"
+fi
+
 # ── Script di avvio ──────────────────────────────────────────
 info "Creazione script di avvio ${BIN_LINK}…"
-cat > "$BIN_LINK" <<EOF
+cat > "$BIN_LINK" <<'LAUNCHER'
 #!/usr/bin/env bash
 # Avvio XML Editor
-exec java \\
-    -Dfile.encoding=UTF-8 \\
-    -Dsun.stdout.encoding=UTF-8 \\
-    --module-path "${INSTALL_DIR}/javafx-libs" \\
-    --add-modules javafx.controls,javafx.fxml \\
-    --add-opens=javafx.graphics/com.sun.glass.ui=ALL-UNNAMED \\
-    --add-opens=javafx.base/com.sun.javafx.runtime=ALL-UNNAMED \\
-    -jar "${INSTALL_DIR}/${JAR_NAME}" "\$@"
-EOF
+
+# Costruisce il classpath aggiuntivo con tutte le dipendenze non-JavaFX
+# (reactfx, richtextfx, saxon, …)
+CP_EXTRA=""
+if [ -d "/opt/xmleditor/classpath-libs" ]; then
+    for jar in /opt/xmleditor/classpath-libs/*.jar; do
+        [ -f "$jar" ] && CP_EXTRA="${CP_EXTRA}:${jar}"
+    done
+fi
+
+exec java \
+    -Dfile.encoding=UTF-8 \
+    -Dsun.stdout.encoding=UTF-8 \
+    --module-path "/opt/xmleditor/javafx-libs" \
+    --add-modules javafx.controls,javafx.fxml \
+    --add-opens=javafx.graphics/com.sun.glass.ui=ALL-UNNAMED \
+    --add-opens=javafx.base/com.sun.javafx.runtime=ALL-UNNAMED \
+    -cp "/opt/xmleditor/XmlEditor-2.0.0.jar${CP_EXTRA}" \
+    it.touchinformatica.xmleditor.MainApp "$@"
+LAUNCHER
 chmod +x "$BIN_LINK"
 success "Script di avvio creato"
 
