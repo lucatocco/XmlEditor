@@ -37,11 +37,19 @@ jobs:
       - name: Maven build (Windows profile)
         run: mvn clean package -q -DskipTests -P windows
 
-      # 5. Installa WiX Toolset (necessario per jpackage --type msi)
-      - name: Install WiX Toolset
+      # 5. WiX Toolset — già pre-installato su windows-latest, aggiungi solo al PATH
+      - name: Add WiX to PATH
+        shell: pwsh
         run: |
-          choco install wixtoolset --version 3.14.1 -y --no-progress
-          echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" >> $env:GITHUB_PATH
+          $wixDir = Get-ChildItem "C:\Program Files (x86)" -Filter "WiX Toolset*" |
+                    Sort-Object Name -Descending | Select-Object -First 1
+          if ($wixDir) {
+            echo "$($wixDir.FullName)\bin" | Out-File -Append -FilePath $env:GITHUB_PATH
+            Write-Host "WiX trovato: $($wixDir.FullName)"
+          } else {
+            choco install wixtoolset -y --no-progress
+            echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" | Out-File -Append -FilePath $env:GITHUB_PATH
+          }
 
       # 6. Genera MSI con jpackage
       - name: Build MSI with jpackage
