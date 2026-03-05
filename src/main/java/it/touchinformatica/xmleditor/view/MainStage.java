@@ -105,7 +105,7 @@ public class MainStage {
         FileChooser fc = new FileChooser();
         fc.setTitle("Apri file XML");
         fc.getExtensionFilters().addAll(
-            new FileChooser.ExtensionFilter("File XML/XSD", "*.xml", "*.xsd"),
+            new FileChooser.ExtensionFilter("File XML/XSD/TXT", "*.xml", "*.xsd", "*.txt"),
             new FileChooser.ExtensionFilter("Tutti i file", "*.*")
         );
         List<File> files = fc.showOpenMultipleDialog(stage);

@@ -108,7 +108,7 @@ public class MainController {
         FileChooser fc = new FileChooser();
         fc.setTitle("Apri file XML");
         fc.getExtensionFilters().addAll(
-            new FileChooser.ExtensionFilter("File XML/XSD", "*.xml", "*.xsd"),
+            new FileChooser.ExtensionFilter("File XML/XSD/TXT", "*.xml", "*.xsd", "*.txt"),
             new FileChooser.ExtensionFilter("Tutti i file", "*.*")
         );
         // Nota: openFile singolo nel controller, multi-file gestito da MainStage

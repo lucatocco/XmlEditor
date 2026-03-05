@@ -87,9 +87,7 @@ public class EditorPane extends StackPane {
     }
 
     public int getLineCount() {
-        String text = codeArea.getText();
-        if (text.isEmpty()) return 1;
-        return (int) text.chars().filter(c -> c == '\n').count() + 1;
+        return ((java.util.List<?>) codeArea.getParagraphs()).size();
     }
 
     // ── Word Wrap ──────────────────────────────────

@@ -67,6 +67,9 @@ public class XmlSyntaxHighlighter {
         return "xml-text";
     }
 
+    /** Testo oltre questa dimensione non viene colorato (evita freeze su file enormi). */
+    private static final int MAX_HIGHLIGHT_CHARS = 500_000;
+
     /**
      * Collega il syntax highlighting in tempo reale a una CodeArea.
      * Usa un ScheduledExecutorService per debounce senza dipendenze da org.reactfx.
@@ -82,6 +85,7 @@ public class XmlSyntaxHighlighter {
         codeArea.textProperty().addListener((obs, oldText, newText) -> {
             ScheduledFuture<?> prev = pending.get();
             if (prev != null) prev.cancel(false);
+            if (newText.length() > MAX_HIGHLIGHT_CHARS) return;
             pending.set(executor.schedule(() -> {
                 StyleSpans<Collection<String>> spans = computeHighlighting(newText);
                 Platform.runLater(() -> {
