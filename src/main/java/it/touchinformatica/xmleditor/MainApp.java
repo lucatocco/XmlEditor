@@ -20,7 +20,7 @@ public class MainApp extends Application {
                 .map(Path::of)
                 .filter(p -> p.toFile().isFile())
                 .toList();
-        new MainStage(primaryStage, files).show();
+        new MainStage(primaryStage, files, getHostServices()).show();
     }
 
     public static void main(String[] args) {

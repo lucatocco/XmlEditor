@@ -32,15 +32,21 @@ public class MainStage {
     private final XsdFolderManager xsdFolderMgr;
     private final TabPane          tabPane;
     private final StatusBar        statusBar;
+    private final javafx.application.HostServices hostServices;
 
     private Menu menuRecenti;
 
     public MainStage(Stage stage) {
-        this(stage, List.of());
+        this(stage, List.of(), null);
     }
 
     public MainStage(Stage stage, List<Path> initialFiles) {
+        this(stage, initialFiles, null);
+    }
+
+    public MainStage(Stage stage, List<Path> initialFiles, javafx.application.HostServices hostServices) {
         this.stage         = stage;
+        this.hostServices  = hostServices;
         this.xmlService    = new XmlService();
         this.recentMgr     = new RecentFilesManager();
         this.xsdFolderMgr  = new XsdFolderManager();
@@ -301,9 +307,13 @@ public class MainStage {
             miXsd, miValida
         );
 
+        MenuItem miAbout = menuItem("Informazioni…", null, this::showAbout);
+        Menu menuAiuto = new Menu("Aiuto");
+        menuAiuto.getItems().add(miAbout);
+
         refreshRecentMenu(recentMgr.getRecentFiles());
         updateXsdFolderStatus();
-        return new MenuBar(menuFile, menuModifica, menuVisualizza, menuXml);
+        return new MenuBar(menuFile, menuModifica, menuVisualizza, menuXml, menuAiuto);
     }
 
     // ──────────────────────────────────────────────
@@ -401,6 +411,30 @@ public class MainStage {
         a.setContentText(schemas.size() + " schema/i disponibili:" + list);
         a.getDialogPane().setPrefWidth(520);
         a.showAndWait();
+    }
+
+    private void showAbout() {
+        javafx.scene.control.Label lDev     = new javafx.scene.control.Label("Sviluppato da: Luca Tocco");
+        javafx.scene.control.Label lAzienda = new javafx.scene.control.Label("Azienda: Touch Informatica S.r.l.s.");
+        javafx.scene.control.Label lSito    = new javafx.scene.control.Label("Sito web: ");
+        javafx.scene.control.Hyperlink link = new javafx.scene.control.Hyperlink("www.touchinformatica.it");
+        link.setOnAction(e -> {
+            if (hostServices != null)
+                hostServices.showDocument("https://www.touchinformatica.it");
+        });
+        javafx.scene.layout.HBox siteRow = new javafx.scene.layout.HBox(lSito, link);
+        siteRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+
+        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(6, lDev, lAzienda, siteRow);
+        content.setPadding(new javafx.geometry.Insets(10, 0, 0, 0));
+
+        Dialog<Void> dlg = new Dialog<>();
+        dlg.setTitle("Informazioni");
+        dlg.setHeaderText("XML Editor  v2.0.0");
+        dlg.getDialogPane().setContent(content);
+        dlg.getDialogPane().setPrefWidth(380);
+        dlg.getDialogPane().getButtonTypes().add(ButtonType.OK);
+        dlg.showAndWait();
     }
 
     private void updateXsdFolderStatus() {

@@ -1,0 +1,98 @@
+name: Build MSI (Windows)
+
+on:
+  # Avvio manuale dalla pagina Actions di GitHub
+  workflow_dispatch:
+  # Oppure automatico su ogni push su main
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'install/**'
+
+jobs:
+  build-msi:
+    runs-on: windows-latest
+
+    steps:
+      # 1. Checkout sorgenti
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. JDK 21
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # 3. Cache Maven
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('pom.xml') }}
+
+      # 4. Build con profilo Windows
+      - name: Maven build (Windows profile)
+        run: mvn clean package -q -DskipTests -P windows
+
+      # 5. Installa WiX Toolset (necessario per jpackage --type msi)
+      - name: Install WiX Toolset
+        run: |
+          choco install wixtoolset --version 3.14.1 -y --no-progress
+          echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" >> $env:GITHUB_PATH
+
+      # 6. Genera MSI con jpackage
+      - name: Build MSI with jpackage
+        shell: pwsh
+        run: |
+          $version   = "2.0.0"
+          $jarName   = "XmlEditor-$version.jar"
+          $inputDir  = "target\jpackage-input"
+          $outputDir = "target\installer"
+
+          New-Item -ItemType Directory -Force $inputDir  | Out-Null
+          New-Item -ItemType Directory -Force $outputDir | Out-Null
+          Copy-Item "target\$jarName" "$inputDir\"
+
+          $iconArgs = @()
+          if (Test-Path "install\xmleditor.ico") {
+            $iconArgs = @("--icon", "install\xmleditor.ico")
+          }
+
+          & jpackage `
+            --type         msi `
+            --name         "XML Editor" `
+            --app-version  $version `
+            --vendor       "Touch Informatica S.r.l.s." `
+            --description  "Editor XML con syntax highlighting e validazione XSD" `
+            --input        $inputDir `
+            --main-jar     $jarName `
+            --main-class   it.touchinformatica.xmleditor.MainApp `
+            --module-path  "target\javafx-libs" `
+            --add-modules  "javafx.controls,javafx.fxml" `
+            --java-options "-Dfile.encoding=UTF-8" `
+            --java-options "-Dsun.stdout.encoding=UTF-8" `
+            --java-options "--add-opens=javafx.graphics/com.sun.glass.ui=ALL-UNNAMED" `
+            --java-options "--add-opens=javafx.base/com.sun.javafx.runtime=ALL-UNNAMED" `
+            --dest         $outputDir `
+            --win-menu `
+            --win-shortcut `
+            --win-dir-chooser `
+            --win-menu-group "Touch Informatica" `
+            --win-upgrade-uuid "a3f1e2d4-7b6c-4e8a-9d2f-1c3b5a7e9f0d" `
+            @iconArgs
+
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+          $msi = Get-ChildItem "$outputDir\*.msi" | Select-Object -First 1
+          Write-Host "MSI generato: $($msi.Name) ($([math]::Round($msi.Length/1MB,1)) MB)"
+
+      # 7. Pubblica il MSI come artefatto scaricabile
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XML-Editor-MSI
+          path: target/installer/*.msi
+          retention-days: 30

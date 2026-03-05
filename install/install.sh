@@ -64,9 +64,9 @@ rm -rf target/ 2>/dev/null || true
 # che i file in target/ diventino di proprietà di root
 BUILD_USER="${SUDO_USER:-$(logname 2>/dev/null || echo "$USER")}"
 if [ "$BUILD_USER" != "root" ] && [ -n "$BUILD_USER" ]; then
-    sudo -u "$BUILD_USER" mvn clean package -q -DskipTests
+    sudo -u "$BUILD_USER" mvn clean package -q -DskipTests -P linux
 else
-    mvn clean package -q -DskipTests
+    mvn clean package -q -DskipTests -P linux
 fi
 if [ ! -f "target/${JAR_NAME}" ]; then
     error "Build fallita: ${JAR_NAME} non trovato in target/"

@@ -17,7 +17,26 @@
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <javafx.version>21.0.2</javafx.version>
+        <!-- Piattaforma JavaFX: linux | win | mac  (default: linux) -->
+        <javafx.platform>linux</javafx.platform>
     </properties>
+
+    <!-- Profili piattaforma: mvn package -P windows  /  mvn package -P mac -->
+    <profiles>
+        <profile>
+            <id>linux</id>
+            <activation><activeByDefault>true</activeByDefault></activation>
+            <properties><javafx.platform>linux</javafx.platform></properties>
+        </profile>
+        <profile>
+            <id>windows</id>
+            <properties><javafx.platform>win</javafx.platform></properties>
+        </profile>
+        <profile>
+            <id>mac</id>
+            <properties><javafx.platform>mac</javafx.platform></properties>
+        </profile>
+    </profiles>
 
     <dependencies>
         <!-- JavaFX -->
@@ -25,13 +44,13 @@
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
             <version>${javafx.version}</version>
-            <classifier>linux</classifier>
+            <classifier>${javafx.platform}</classifier>
         </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
-            <classifier>linux</classifier>
+            <classifier>${javafx.platform}</classifier>
         </dependency>
 
         <!-- RichTextFX: syntax highlighting XML nell'editor -->
