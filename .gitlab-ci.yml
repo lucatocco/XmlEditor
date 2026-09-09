@@ -26,7 +26,8 @@ build-msi-windows:
 
     # 5. Genera MSI con jpackage
     - |
-      $version  = "2.0.0"
+      # Versione: unica fonte di verità è pom.xml
+      $version  = ([xml](Get-Content "pom.xml")).project.version
       $jarName  = "XmlEditor-$version.jar"
       $inputDir = "target\jpackage-input"
       $outDir   = "target\installer"

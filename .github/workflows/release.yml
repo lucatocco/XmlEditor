@@ -1,0 +1,64 @@
+name: Release
+
+# Un rilascio parte SOLO da un tag: git tag v2.1.0 && git push origin v2.1.0
+# (lo fa per te install/bump-version.sh)
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write        # necessario per creare la GitHub Release
+
+jobs:
+  # Il tag e pom.xml devono dire la stessa cosa, altrimenti si rilascia
+  # un MSI con un numero e si annuncia una release con un altro.
+  verifica-versione:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Il tag deve corrispondere alla versione di pom.xml
+        run: |
+          POM_VERSION=$(sed -n 's|^[[:space:]]*<version>\(.*\)</version>.*|\1|p' pom.xml | head -1)
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "pom.xml : $POM_VERSION"
+          echo "tag     : $TAG_VERSION"
+          if [ "$POM_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Il tag $GITHUB_REF_NAME non corrisponde alla versione $POM_VERSION di pom.xml"
+            exit 1
+          fi
+
+  # Riusa lo stesso identico workflow del build quotidiano: nessuna duplicazione
+  build-msi:
+    needs: verifica-versione
+    uses: ./.github/workflows/build-msi.yml
+
+  pubblica:
+    needs: build-msi
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Scarica l'MSI prodotto dal build
+        uses: actions/download-artifact@v4
+        with:
+          name: XML-Editor-MSI
+          path: dist
+
+      - name: Crea la GitHub Release con l'installer allegato
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la dist/
+          # Se la release esiste già (re-run del workflow) si aggiorna l'allegato
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME già presente: aggiorno l'installer"
+            gh release upload "$GITHUB_REF_NAME" dist/*.msi --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/*.msi \
+              --title "XML Editor $GITHUB_REF_NAME" \
+              --generate-notes
+          fi
+          echo "Release pubblicata: $(gh release view "$GITHUB_REF_NAME" --json url -q .url)"

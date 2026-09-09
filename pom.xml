@@ -69,6 +69,25 @@
     </dependencies>
 
     <build>
+        <!-- app.properties viene filtrato per iniettarci ${project.version}:
+             è così che l'applicazione conosce la propria versione a runtime. -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>**/app.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>**/app.properties</exclude>
+                </excludes>
+            </resource>
+        </resources>
+
         <plugins>
             <!-- JavaFX Maven Plugin -->
             <plugin>
@@ -134,6 +153,11 @@
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>it.touchinformatica.xmleditor.MainApp</mainClass>
+                                    <manifestEntries>
+                                        <Implementation-Title>${project.name}</Implementation-Title>
+                                        <Implementation-Version>${project.version}</Implementation-Version>
+                                        <Implementation-Vendor>Touch Informatica S.r.l.s.</Implementation-Vendor>
+                                    </manifestEntries>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>

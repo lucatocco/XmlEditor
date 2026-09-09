@@ -4,14 +4,14 @@ import javafx.application.Platform;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
 import org.xml.sax.Attributes;
+import org.xml.sax.InputSource;
 import org.xml.sax.Locator;
 import org.xml.sax.helpers.DefaultHandler;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
-import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
+import java.io.StringReader;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.function.Consumer;
@@ -29,7 +29,7 @@ public class TreePane extends VBox {
     private Consumer<Integer> onNodeSelected;
 
     public TreePane() {
-        Label title = new Label("Struttura XML");
+        Label title = new Label("XML Structure");
         title.getStyleClass().add("panel-title");
 
         treeView = new TreeView<>();
@@ -63,7 +63,9 @@ public class TreePane extends VBox {
                 factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
                 SAXParser parser = factory.newSAXParser();
                 TreeBuilderHandler handler = new TreeBuilderHandler();
-                parser.parse(new ByteArrayInputStream(xmlText.getBytes(StandardCharsets.UTF_8)), handler);
+                // StringReader e non byte UTF-8: così la dichiarazione
+                // <?xml encoding="…"?> non fa re-interpretare gli accentati
+                parser.parse(new InputSource(new StringReader(xmlText)), handler);
                 TreeItem<XmlNode> root = handler.getRoot();
                 Platform.runLater(() -> {
                     treeView.setRoot(root);

@@ -10,7 +10,7 @@ public class StatusBar extends HBox {
     private final Label label;
 
     public StatusBar() {
-        label = new Label("Pronto");
+        label = new Label("Ready");
         label.getStyleClass().add("status-label");
         HBox.setHgrow(label, Priority.ALWAYS);
         getChildren().add(label);

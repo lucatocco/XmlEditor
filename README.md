@@ -1,10 +1,11 @@
 # XmlEditor — JavaFX + Maven
 
-Editor XML completo con tutte le funzionalità di un notepad professionale.
+A full-featured XML editor: tabs, syntax highlighting, tree view, XSD validation
+and pretty printing.
 
 ---
 
-## Avvio rapido
+## Quick start
 
 ```bash
 cd XmlEditor
@@ -13,87 +14,171 @@ mvn javafx:run
 
 ---
 
-## Funzionalità
+## Features
+
+### Tabs
+| Action | Shortcut |
+|--------|----------|
+| New tab | Ctrl+T |
+| Close tab | Ctrl+W |
+| Next tab | Ctrl+Tab |
+| Previous tab | Ctrl+Shift+Tab |
+
+Each tab is an independent session with its own editor, tree, log and document state.
 
 ### File
-| Azione | Tasto |
-|--------|-------|
-| Nuovo documento | Ctrl+N |
-| Apri XML/XSD | Ctrl+O |
-| Salva | Ctrl+S |
-| Salva come | Ctrl+Shift+S |
-| File recenti | Menu File → Recenti (persistiti tra sessioni) |
-| Chiudi | Menu File → Chiudi |
+| Action | Shortcut |
+|--------|----------|
+| New document | Ctrl+N |
+| Open XML/XSD/TXT (multiple files at once) | Ctrl+O |
+| Save | Ctrl+S |
+| Save As | Ctrl+Shift+S |
+| Recent files | File → Recent Files (persisted across sessions) |
+| Exit | Alt+F4 |
 
-### Modifica (notepad completo)
-| Azione | Tasto |
-|--------|-------|
-| Annulla | Ctrl+Z |
-| Ripeti | Ctrl+Shift+Z |
-| Taglia | Ctrl+X |
-| Copia | Ctrl+C |
-| Incolla | Ctrl+V |
-| Seleziona tutto | Ctrl+A |
-| Cerca (con nav avanti/indietro) | Ctrl+F |
-| Vai a riga | Ctrl+G |
+### Edit
+| Action | Shortcut |
+|--------|----------|
+| Undo | Ctrl+Z |
+| Redo | Ctrl+Shift+Z |
+| Cut | Ctrl+X |
+| Copy | Ctrl+C |
+| Paste | Ctrl+V |
+| Select all | Ctrl+A |
+| Find (with previous/next navigation) | Ctrl+F |
+| Go to line | Ctrl+G |
 
-### Visualizza
-- **A capo automatico** (word wrap) — toggle nel menu Visualizza
-- **Encoding** — ricarica il file con UTF-8, ISO-8859-1, UTF-16, Windows-1252
+### View
+- **Word wrap** — toggle in the View menu
+- **Encoding** — reload the file as UTF-8, ISO-8859-1, UTF-16 or Windows-1252
 
 ### XML
-| Azione | Tasto |
-|--------|-------|
+| Action | Shortcut |
+|--------|----------|
 | Pretty Print | Ctrl+P |
-| Carica schema XSD | Menu XML |
-| Valida XSD | Ctrl+E |
+| Validate against XSD | Ctrl+E |
+| Set XSD folder | XML menu |
+| Load a single XSD | XML menu |
+| XSD folder info | XML menu |
 
-### Indicatori
-- **Asterisco nel titolo** (`* nome.xml`) quando ci sono modifiche non salvate
-- **Statusbar** con riga:colonna corrente, totale righe, encoding
-- **Dialogo di conferma** prima di chiudere/aprire con modifiche non salvate
-- **Log colorato** (verde/arancio/rosso) per tutte le operazioni
-- **Click su errore XSD** → salta alla riga dell'errore nell'editor
+**Pretty Print** rebuilds the indentation from scratch, so running it repeatedly always
+yields the same result. Mixed content (`<p>text <b>tag</b> text</p>`), CDATA sections and
+subtrees marked `xml:space="preserve"` are left untouched, and the XML declaration is
+rewritten to match the encoding the file will actually be saved with.
+
+**XSD validation** picks the schema in this order:
+
+1. a schema loaded manually for the current session (Load Single XSD)
+2. the file named in the document's `xsi:schemaLocation` / `noNamespaceSchemaLocation`,
+   looked up in the configured XSD folder
+3. a schema with the same base name as the XML file (`invoice.xml` → `invoice.xsd`)
+4. otherwise, a picker listing every schema in the folder
+
+The XSD folder is remembered across restarts.
+
+### Indicators
+- **Asterisk in the tab title** (`* file.xml`) when there are unsaved changes
+- **Status bar** with current line:column, total lines, encoding and line ending
+- **Confirmation dialog** before closing or replacing a document with unsaved changes
+- **Color-coded log** (green/orange/red) for every operation
+- **Click an XSD error** → jumps to the offending line in the editor
+- **Last cursor position** is restored per file
 
 ---
 
-## Struttura progetto
+## Project structure
 
 ```
 XmlEditor/
-├── pom.xml
+├── pom.xml                       ← single source of truth for the version
+├── install/
+│   ├── install.sh                ← Linux install (builds, installs, desktop entry)
+│   ├── uninstall.sh
+│   ├── install-windows.ps1
+│   ├── build-msi.ps1             ← local MSI build with jpackage
+│   ├── bump-version.sh           ← version bump + git tag + release
+│   ├── xmleditor.desktop
+│   └── xmleditor.svg
+├── .github/workflows/
+│   ├── build-msi.yml             ← MSI build (also reusable)
+│   └── release.yml               ← publishes a GitHub Release on every v* tag
 └── src/main/
     ├── java/
     │   ├── module-info.java
     │   └── it/touchinformatica/xmleditor/
     │       ├── MainApp.java
     │       ├── model/XmlDocument.java
-    │       ├── service/XmlService.java          ← pretty print + validazione (solo JDK)
+    │       ├── service/XmlService.java          ← pretty print + XSD validation (JDK only)
     │       ├── util/
+    │       │   ├── AppInfo.java                 ← reads name and version at runtime
     │       │   ├── XmlSyntaxHighlighter.java
-    │       │   └── RecentFilesManager.java      ← NUOVO: persistenza file recenti
+    │       │   ├── RecentFilesManager.java
+    │       │   ├── LastPositionManager.java
+    │       │   └── XsdFolderManager.java
     │       ├── view/
-    │       │   ├── MainStage.java               ← menu completo + toolbar
-    │       │   ├── EditorPane.java              ← undo/redo/cut/copy/paste/selectAll/wordwrap
+    │       │   ├── MainStage.java               ← window, menu bar, toolbar, tabs
+    │       │   ├── EditorSession.java           ← one self-contained tab
+    │       │   ├── EditorPane.java              ← CodeArea, undo/redo, encoding, word wrap
     │       │   ├── TreePane.java
     │       │   ├── SearchBar.java
-    │       │   └── LogPane.java                 ← log + statusbar riga:col
-    │       └── controller/
-    │           └── MainController.java          ← nuovo/apri/salva/encoding/goToLine/confirm
-    └── resources/css/editor.css                 ← tema dark + stili menu/dialog
+    │       │   ├── LogPane.java
+    │       │   └── StatusBar.java
+    │       └── controller/MainController.java   ← one controller per tab
+    └── resources/it/touchinformatica/xmleditor/
+        ├── app.properties                       ← filtered by Maven, carries the version
+        └── css/editor.css
 ```
 
 ---
 
-## Prerequisiti
+## Requirements
 
 ```bash
-# Java 21+
-java -version
-
-# Maven 3.8+
-mvn -version
-
-# Avvio
-mvn javafx:run
+java -version   # Java 21+
+mvn -version    # Maven 3.8+
 ```
+
+---
+
+## Installation
+
+**Linux (Mint / Ubuntu)** — builds, installs to `/opt/xmleditor` and registers the
+desktop entry:
+
+```bash
+./install/install.sh
+./install/uninstall.sh   # to remove it
+```
+
+**Windows** — either run the installer script, or build an MSI with jpackage
+(requires the WiX Toolset):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install\install-windows.ps1
+powershell -ExecutionPolicy Bypass -File install\build-msi.ps1
+```
+
+---
+
+## Releasing a new version
+
+The version lives in **`pom.xml` only**. Everything else — the About dialog, the install
+scripts, the MSI and the CI pipelines — reads it from there, so a release is a one-line
+change:
+
+```bash
+./install/bump-version.sh 2.1.0 --push
+```
+
+This updates `pom.xml`, commits, creates the `v2.1.0` tag and pushes it. The tag triggers
+`.github/workflows/release.yml`, which checks that the tag matches the version in
+`pom.xml`, builds the MSI and publishes a GitHub Release with the installer attached.
+
+Without `--push` nothing leaves your machine: the script prints the commands to run.
+
+Versions must be `MAJOR.MINOR.PATCH` — jpackage rejects suffixes such as `-SNAPSHOT`
+in the MSI's `--app-version`.
+
+---
+
+Developed by Luca Tocco — Touch Informatica S.r.l.s. — <https://www.touchinformatica.it>

@@ -68,8 +68,8 @@ public class MainController {
             int para = editorPane.getCodeArea().getCurrentParagraph();
             int col  = editorPane.getCodeArea().getCaretColumn();
             int tot  = editorPane.getLineCount();
-            statusBar.setStatus("Riga " + (para + 1) + ":" + (col + 1)
-                + "  |  Righe: " + tot
+            statusBar.setStatus("Line " + (para + 1) + ":" + (col + 1)
+                + "  |  Lines: " + tot
                 + "  |  " + editorPane.getEncoding()
                 + "  |  " + editorPane.getLineEnding());
         });
@@ -94,9 +94,9 @@ public class MainController {
         editorPane.newDocument();
         treePane.clear();
         currentDoc = null;
-        updateTabTitle.accept("Nuovo documento");
-        logPane.log("Nuovo documento", "info");
-        statusBar.setStatus("Pronto");
+        updateTabTitle.accept("Untitled");
+        logPane.log("New document", "info");
+        statusBar.setStatus("Ready");
     }
 
     // ──────────────────────────────────────────────
@@ -106,10 +106,10 @@ public class MainController {
     public void openFile() {
         if (!confirmDiscardChanges()) return;
         FileChooser fc = new FileChooser();
-        fc.setTitle("Apri file XML");
+        fc.setTitle("Open XML File");
         fc.getExtensionFilters().addAll(
             new FileChooser.ExtensionFilter("File XML/XSD/TXT", "*.xml", "*.xsd", "*.txt"),
-            new FileChooser.ExtensionFilter("Tutti i file", "*.*")
+            new FileChooser.ExtensionFilter("All Files", "*.*")
         );
         // Nota: openFile singolo nel controller, multi-file gestito da MainStage
         File file = fc.showOpenDialog(null);
@@ -125,7 +125,7 @@ public class MainController {
             lastPosMgr.savePosition(currentDoc.getFilePath(),
                 editorPane.getCodeArea().getCurrentParagraph() + 1);
         }
-        statusBar.setStatus("Caricamento " + path.getFileName() + "…");
+        statusBar.setStatus("Loading " + path.getFileName() + "…");
         Thread.ofVirtual().start(() -> {
             try {
                 long sizeMb = Files.size(path) / 1024 / 1024;
@@ -138,9 +138,9 @@ public class MainController {
                     editorPane.setEncoding(charset.name());
                     editorPane.setLineEnding(le);
                     updateTabTitle.accept(path.getFileName().toString());
-                    statusBar.setStatus("Aperto: " + path.getFileName()
+                    statusBar.setStatus("Opened: " + path.getFileName()
                         + " (" + sizeMb + " MB)  |  " + charset.name() + "  |  " + le);
-                    logPane.log("Caricato: " + path + " (" + sizeMb + " MB)  [" + le + "]", "ok");
+                    logPane.log("Loaded: " + path + " (" + sizeMb + " MB)  [" + le + "]", "ok");
                     recentMgr.add(path);
                     refreshRecentMenu.accept(recentMgr.getRecentFiles());
                     rebuildTree(content);
@@ -148,7 +148,7 @@ public class MainController {
                     if (savedLine > 1) editorPane.goToLine(savedLine);
                 });
             } catch (IOException e) {
-                Platform.runLater(() -> logPane.log("Errore apertura: " + e.getMessage(), "error"));
+                Platform.runLater(() -> logPane.log("Error opening file: " + e.getMessage(), "error"));
             }
         });
     }
@@ -164,17 +164,22 @@ public class MainController {
     // SALVA
     // ──────────────────────────────────────────────
 
-    public void saveFile() {
-        if (currentDoc == null || currentDoc.getFilePath() == null) { saveFileAs(); return; }
+    /** @return false se l'utente ha annullato la scelta del file */
+    public boolean saveFile() {
+        if (currentDoc == null || currentDoc.getFilePath() == null) return saveFileAs();
         writeToDisk(currentDoc.getFilePath());
+        return true;
     }
 
-    public void saveFileAs() {
+    /** @return false se l'utente ha annullato la scelta del file */
+    public boolean saveFileAs() {
         FileChooser fc = new FileChooser();
-        fc.setTitle("Salva file XML");
-        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("File XML", "*.xml"));
+        fc.setTitle("Save XML File");
+        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("XML Files", "*.xml"));
         File file = fc.showSaveDialog(null);
-        if (file != null) writeToDisk(file.toPath());
+        if (file == null) return false;
+        writeToDisk(file.toPath());
+        return true;
     }
 
     private void writeToDisk(Path path) {
@@ -188,13 +193,13 @@ public class MainController {
                     else { currentDoc.setFilePath(path); currentDoc.markSaved(); }
                     editorPane.markSaved();
                     updateTabTitle.accept(path.getFileName().toString());
-                    statusBar.setStatus("Salvato: " + path);
-                    logPane.log("Salvato: " + path, "ok");
+                    statusBar.setStatus("Saved: " + path);
+                    logPane.log("Saved: " + path, "ok");
                     recentMgr.add(path);
                     refreshRecentMenu.accept(recentMgr.getRecentFiles());
                 });
             } catch (IOException e) {
-                Platform.runLater(() -> logPane.log("Errore salvataggio: " + e.getMessage(), "error"));
+                Platform.runLater(() -> logPane.log("Error saving file: " + e.getMessage(), "error"));
             }
         });
     }
@@ -204,21 +209,24 @@ public class MainController {
     // ──────────────────────────────────────────────
 
     public void prettyPrint() {
-        String content = editorPane.getText();
-        statusBar.setStatus("Pretty print in corso…");
+        String  content = editorPane.getText();
+        Charset charset = editorPane.getCharset();
+        statusBar.setStatus("Pretty printing…");
         Thread.ofVirtual().start(() -> {
             try {
-                String formatted = xmlService.prettyPrint(content);
+                String formatted = xmlService.prettyPrint(content, charset);
                 Platform.runLater(() -> {
-                    editorPane.setText(formatted);
-                    statusBar.setStatus("Pretty print completato");
-                    logPane.log("Pretty print completato", "ok");
+                    // replaceText e non setText: il pretty print resta annullabile
+                    // e il documento risulta modificato finché non lo salvi
+                    editorPane.replaceText(formatted);
+                    statusBar.setStatus("Pretty print complete");
+                    logPane.log("Pretty print complete", "ok");
                     rebuildTree(formatted);
                 });
             } catch (Exception e) {
                 Platform.runLater(() -> {
-                    logPane.log("Errore XML: " + e.getMessage(), "error");
-                    statusBar.setStatus("Errore nel pretty print");
+                    logPane.log("XML error: " + e.getMessage(), "error");
+                    statusBar.setStatus("Pretty print failed");
                 });
             }
         });
@@ -234,15 +242,15 @@ public class MainController {
      */
     public void setXsdFolder() {
         DirectoryChooser dc = new DirectoryChooser();
-        dc.setTitle("Seleziona cartella XSD");
+        dc.setTitle("Select XSD Folder");
         xsdFolderMgr.getXsdFolder().ifPresent(f -> dc.setInitialDirectory(f.toFile()));
         File dir = dc.showDialog(null);
         if (dir == null) return;
         xsdFolderMgr.setXsdFolder(dir.toPath());
         int count = xsdFolderMgr.listAvailableSchemas().size();
-        logPane.log("Cartella XSD impostata: " + dir.getAbsolutePath()
-            + "  (" + count + " schema/i trovati)", "ok");
-        statusBar.setStatus("Cartella XSD: " + dir.getName() + " (" + count + " XSD)");
+        logPane.log("XSD folder set: " + dir.getAbsolutePath()
+            + "  (" + count + " schema(s) found)", "ok");
+        statusBar.setStatus("XSD folder: " + dir.getName() + " (" + count + " XSD)");
     }
 
     /**
@@ -251,13 +259,13 @@ public class MainController {
      */
     public void loadXsd() {
         FileChooser fc = new FileChooser();
-        fc.setTitle("Carica schema XSD");
-        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("Schema XSD", "*.xsd"));
+        fc.setTitle("Load XSD Schema");
+        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("XSD Schema", "*.xsd"));
         xsdFolderMgr.getXsdFolder().ifPresent(f -> fc.setInitialDirectory(f.toFile()));
         File file = fc.showOpenDialog(null);
         if (file == null) return;
         currentXsdPath = file.toPath();
-        logPane.log("Schema XSD caricato manualmente: " + file.getName(), "ok");
+        logPane.log("XSD schema loaded manually: " + file.getName(), "ok");
         statusBar.setStatus("XSD: " + file.getName());
     }
 
@@ -274,7 +282,7 @@ public class MainController {
             if (schemaLocationXsd != null) {
                 xsdToUse = xsdFolderMgr.findMatchingSchema(schemaLocationXsd).orElse(null);
                 if (xsdToUse != null) {
-                    logPane.log("Schema trovato via schemaLocation: " + xsdToUse.getFileName(), "ok");
+                    logPane.log("Schema found via schemaLocation: " + xsdToUse.getFileName(), "ok");
                 }
             }
 
@@ -286,7 +294,7 @@ public class MainController {
                 if (xmlFileName != null) {
                     xsdToUse = xsdFolderMgr.findMatchingSchema(xmlFileName).orElse(null);
                     if (xsdToUse != null) {
-                        logPane.log("Schema trovato per nome file: " + xsdToUse.getFileName(), "ok");
+                        logPane.log("Schema found by file name: " + xsdToUse.getFileName(), "ok");
                     }
                 }
             }
@@ -295,7 +303,7 @@ public class MainController {
             if (xsdToUse == null) {
                 List<Path> available = xsdFolderMgr.listAvailableSchemas();
                 if (available.isEmpty()) {
-                    logPane.log("Cartella XSD configurata ma non contiene file .xsd", "warn");
+                    logPane.log("XSD folder is configured but contains no .xsd files", "warn");
                     return;
                 }
                 xsdToUse = showXsdPickerDialog(available);
@@ -304,30 +312,30 @@ public class MainController {
         }
 
         if (xsdToUse == null) {
-            logPane.log("Nessuno schema XSD disponibile. "
-                + "Usa 'Imposta cartella XSD' o 'Carica XSD' dal menu XML.", "warn");
+            logPane.log("No XSD schema available. "
+                + "Use 'Set XSD Folder' or 'Load Single XSD' from the XML menu.", "warn");
             return;
         }
 
         final Path finalXsd = xsdToUse;
         String content = editorPane.getText();
-        statusBar.setStatus("Validazione in corso con " + finalXsd.getFileName() + "…");
+        statusBar.setStatus("Validating against " + finalXsd.getFileName() + "…");
         Thread.ofVirtual().start(() -> {
             XmlService.ValidationResult result = xmlService.validate(content, finalXsd);
             Platform.runLater(() -> {
                 if (result.valid()) {
-                    logPane.log("✔ Documento valido  [" + finalXsd.getFileName() + "]", "ok");
-                    statusBar.setStatus("Validazione: OK ✔");
+                    logPane.log("✔ Document is valid  [" + finalXsd.getFileName() + "]", "ok");
+                    statusBar.setStatus("Validation: OK ✔");
                 } else {
-                    logPane.log("Validazione fallita con [" + finalXsd.getFileName() + "] — "
-                        + result.errors().size() + " errore/i:", "error");
+                    logPane.log("Validation failed against [" + finalXsd.getFileName() + "] — "
+                        + result.errors().size() + " error(s):", "error");
                     result.errors().forEach(err ->
-                        logPane.log("  [" + (err.fatal() ? "FATALE" : "ERRORE") + "] "
-                            + "Riga " + err.line() + ", Col " + err.column() + ": " + err.message(), "error")
+                        logPane.log("  [" + (err.fatal() ? "FATAL" : "ERROR") + "] "
+                            + "Line " + err.line() + ", Col " + err.column() + ": " + err.message(), "error")
                     );
                     if (!result.errors().isEmpty())
                         editorPane.goToLine(result.errors().get(0).line());
-                    statusBar.setStatus("Validazione: " + result.errors().size() + " errori ✖");
+                    statusBar.setStatus("Validation: " + result.errors().size() + " error(s) ✖");
                 }
             });
         });
@@ -346,9 +354,9 @@ public class MainController {
             .toList();
 
         ChoiceDialog<String> dialog = new ChoiceDialog<>(names.get(0), names);
-        dialog.setTitle("Scegli schema XSD");
-        dialog.setHeaderText("Nessuno schema corrisponde automaticamente al file corrente.");
-        dialog.setContentText("Schema XSD da usare:");
+        dialog.setTitle("Choose XSD Schema");
+        dialog.setHeaderText("No schema automatically matches the current file.");
+        dialog.setContentText("XSD schema to use:");
 
         return dialog.showAndWait()
             .map(chosen -> available.get(names.indexOf(chosen)))
@@ -413,12 +421,12 @@ public class MainController {
 
     public void showGoToLine() {
         TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Vai a riga");
-        dialog.setHeaderText("Riga (1 - " + editorPane.getLineCount() + "):");
-        dialog.setContentText("Riga:");
+        dialog.setTitle("Go to Line");
+        dialog.setHeaderText("Line (1 - " + editorPane.getLineCount() + "):");
+        dialog.setContentText("Line:");
         dialog.showAndWait().ifPresent(val -> {
             try { editorPane.goToLine(Integer.parseInt(val.trim())); }
-            catch (NumberFormatException e) { logPane.log("Numero riga non valido: " + val, "warn"); }
+            catch (NumberFormatException e) { logPane.log("Invalid line number: " + val, "warn"); }
         });
     }
 
@@ -434,7 +442,7 @@ public class MainController {
         }
         if (!confirmDiscardChanges()) return;
         try { openPath(currentDoc.getFilePath(), Charset.forName(enc)); }
-        catch (Exception e) { logPane.log("Encoding non valido: " + enc, "error"); }
+        catch (Exception e) { logPane.log("Invalid encoding: " + enc, "error"); }
     }
 
     // ──────────────────────────────────────────────
@@ -445,21 +453,23 @@ public class MainController {
         if (!editorPane.isModified()) return true;
 
         String fileName = (currentDoc != null && currentDoc.getFilePath() != null)
-            ? currentDoc.getFileName() : "Nuovo documento";
+            ? currentDoc.getFileName() : "Untitled";
 
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Modifiche non salvate");
-        alert.setHeaderText("\"" + fileName + "\" ha modifiche non salvate.");
-        alert.setContentText("Vuoi salvare prima di continuare?");
+        alert.setTitle("Unsaved Changes");
+        alert.setHeaderText("\"" + fileName + "\" has unsaved changes.");
+        alert.setContentText("Do you want to save before continuing?");
 
-        ButtonType btnSalva   = new ButtonType("Salva");
-        ButtonType btnScarta  = new ButtonType("Non salvare");
-        ButtonType btnAnnulla = new ButtonType("Annulla", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType btnSalva   = new ButtonType("Save");
+        ButtonType btnScarta  = new ButtonType("Don't Save");
+        ButtonType btnAnnulla = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
         alert.getButtonTypes().setAll(btnSalva, btnScarta, btnAnnulla);
 
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isEmpty() || result.get() == btnAnnulla) return false;
-        if (result.get() == btnSalva) saveFile();
+        // Se il "Save As…" viene annullato non si procede: le modifiche
+        // andrebbero perse senza che l'utente lo abbia mai confermato
+        if (result.get() == btnSalva) return saveFile();
         return true;
     }
 
@@ -469,7 +479,7 @@ public class MainController {
 
     private void rebuildTree(String xmlText) {
         treePane.rebuildFrom(xmlText,
-            () -> logPane.log("Albero non disponibile (XML non ben formato)", "warn"));
+            () -> logPane.log("Tree unavailable (XML is not well-formed)", "warn"));
     }
 
     // ──────────────────────────────────────────────

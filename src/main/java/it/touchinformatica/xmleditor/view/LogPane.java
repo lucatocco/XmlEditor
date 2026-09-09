@@ -14,7 +14,7 @@ public class LogPane extends VBox {
     private final TextArea area;
 
     public LogPane() {
-        Label title = new Label("Log / Validazione");
+        Label title = new Label("Log / Validation");
         title.getStyleClass().add("panel-title");
 
         area = new TextArea();

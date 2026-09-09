@@ -27,7 +27,7 @@ public class SearchBar extends HBox {
         this.editorPane = editorPane;
 
         searchField = new TextField();
-        searchField.setPromptText("Cerca nel XML…");
+        searchField.setPromptText("Search in XML…");
         searchField.setPrefWidth(280);
         HBox.setHgrow(searchField, Priority.ALWAYS);
 
@@ -113,7 +113,7 @@ public class SearchBar extends HBox {
         }
 
         countLabel.setText(occurrences.isEmpty()
-            ? "Nessun risultato"
+            ? "No results"
             : "0/" + occurrences.size()
         );
 

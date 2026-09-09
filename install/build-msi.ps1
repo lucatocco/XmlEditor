@@ -10,18 +10,21 @@
 #    powershell -ExecutionPolicy Bypass -File build-msi.ps1
 #
 #  Output:
-#    install\dist\XML-Editor-2.0.0.msi
+#    install\dist\XML-Editor-<versione>.msi
 # ─────────────────────────────────────────────────────────────
 #Requires -Version 5.1
 
 $APP_NAME    = "XML Editor"
 $APP_ID      = "XmlEditor"
-$VERSION     = "2.0.0"
-$JAR_NAME    = "$APP_ID-$VERSION.jar"
 $VENDOR      = "Touch Informatica S.r.l.s."
 
 $SCRIPT_DIR  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PROJECT_DIR = Split-Path -Parent $SCRIPT_DIR
+
+# Versione: unica fonte di verità è pom.xml
+$VERSION     = ([xml](Get-Content "$PROJECT_DIR\pom.xml")).project.version
+if (-not $VERSION) { Write-Host "  X Impossibile leggere la versione da pom.xml" -ForegroundColor Red; exit 1 }
+$JAR_NAME    = "$APP_ID-$VERSION.jar"
 $TARGET_DIR  = "$PROJECT_DIR\target"
 $DIST_DIR    = "$SCRIPT_DIR\dist"
 

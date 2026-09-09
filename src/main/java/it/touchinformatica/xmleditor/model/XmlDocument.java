@@ -30,6 +30,6 @@ public class XmlDocument {
     public void markSaved() { this.modified = false; }
 
     public String getFileName() {
-        return filePath != null ? filePath.getFileName().toString() : "Nuovo documento";
+        return filePath != null ? filePath.getFileName().toString() : "Untitled";
     }
 }

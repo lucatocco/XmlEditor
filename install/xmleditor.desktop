@@ -2,13 +2,13 @@
 Version=1.0
 Type=Application
 Name=XML Editor
-GenericName=Editor XML
-Comment=Editor per file XML con syntax highlighting e validazione XSD
+GenericName=XML Editor
+Comment=XML file editor with syntax highlighting and XSD validation
 Exec=/usr/local/bin/xmleditor %F
 Icon=xmleditor
 Terminal=false
 StartupNotify=true
 Categories=Utility;TextEditor;Development;
 MimeType=text/xml;application/xml;text/plain;application/xsd+xml;
-Keywords=xml;xsd;editor;testo;
+Keywords=xml;xsd;editor;text;
 StartupWMClass=XmlEditor

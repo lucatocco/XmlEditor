@@ -77,7 +77,7 @@ public class EditorSession {
         this.tab = new Tab();
         this.tab.setContent(content);
         this.tab.setUserData(this);   // ← fondamentale per activeSession()
-        updateTabTitle("Nuovo documento");
+        updateTabTitle("Untitled");
 
         // Asterisco nel titolo quando modificato
         editorPane.modifiedProperty().addListener((obs, old, modified) -> {

@@ -3,6 +3,8 @@ name: Build MSI (Windows)
 on:
   # Avvio manuale dalla pagina Actions di GitHub
   workflow_dispatch:
+  # Richiamabile da altri workflow (lo usa release.yml sui tag)
+  workflow_call:
   # Oppure automatico su ogni push su main
   push:
     branches: [ main ]
@@ -55,7 +57,10 @@ jobs:
       - name: Build MSI with jpackage
         shell: pwsh
         run: |
-          $version   = "2.0.0"
+          # Versione: unica fonte di verità è pom.xml
+          $version   = ([xml](Get-Content "pom.xml")).project.version
+          if (-not $version) { Write-Error "Versione non leggibile da pom.xml"; exit 1 }
+          Write-Host "Versione da pom.xml: $version"
           $jarName   = "XmlEditor-$version.jar"
           $inputDir  = "target\jpackage-input"
           $outputDir = "target\installer"

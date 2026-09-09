@@ -61,6 +61,19 @@ public class EditorPane extends StackPane {
         });
     }
 
+    /**
+     * Sostituisce tutto il testo come se fosse una modifica dell'utente:
+     * resta annullabile con Ctrl+Z e marca il documento come modificato.
+     * Da usare per le trasformazioni (es. pretty print), non per il caricamento.
+     */
+    public void replaceText(String text) {
+        Platform.runLater(() -> {
+            codeArea.replaceText(text != null ? text : "");
+            codeArea.moveTo(0);
+            codeArea.requestFollowCaret();
+        });
+    }
+
     public void newDocument() { setText(""); encoding.set("UTF-8"); lineEnding.set("LF"); }
 
     // ── Operazioni Modifica ────────────────────────

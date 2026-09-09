@@ -7,12 +7,15 @@
 
 $APP_NAME    = "XML Editor"
 $APP_ID      = "xmleditor"
-$VERSION     = "2.0.0"
-$JAR_NAME    = "XmlEditor-$VERSION.jar"
 $INSTALL_DIR = "$env:ProgramFiles\XmlEditor"
 
 $SCRIPT_DIR  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PROJECT_DIR = Split-Path -Parent $SCRIPT_DIR
+
+# Versione: unica fonte di verità è pom.xml
+$VERSION     = ([xml](Get-Content "$PROJECT_DIR\pom.xml")).project.version
+if (-not $VERSION) { Write-Host "  X Impossibile leggere la versione da pom.xml" -ForegroundColor Red; exit 1 }
+$JAR_NAME    = "XmlEditor-$VERSION.jar"
 
 # ── Colori ──────────────────────────────────────────────────
 function Write-Info    { param($m) Write-Host "  > $m" -ForegroundColor Cyan }

@@ -6,9 +6,10 @@ set -e
 
 APP_NAME="XML Editor"
 APP_ID="xmleditor"
-VERSION="2.0.0"
-JAR_NAME="XmlEditor-${VERSION}.jar"
 INSTALL_DIR="/opt/xmleditor"
+# Il jar viene installato con un nome stabile, senza versione: così il launcher
+# non va aggiornato a ogni rilascio.
+INSTALLED_JAR="${INSTALL_DIR}/${APP_ID}.jar"
 BIN_LINK="/usr/local/bin/${APP_ID}"
 DESKTOP_DIR="/usr/share/applications"
 ICON_DIR="/usr/share/pixmaps"
@@ -24,6 +25,12 @@ info()    { echo -e "${CYAN}▶ $*${RESET}"; }
 success() { echo -e "${GREEN}✔ $*${RESET}"; }
 warn()    { echo -e "${YELLOW}⚠ $*${RESET}"; }
 error()   { echo -e "${RED}✖ $*${RESET}" >&2; exit 1; }
+
+# ── Versione ─────────────────────────────────────────────────
+# Unica fonte di verità: pom.xml. Nessun numero di versione scritto qui.
+VERSION=$(sed -n 's|^[[:space:]]*<version>\(.*\)</version>.*|\1|p' "${PROJECT_DIR}/pom.xml" | head -1)
+[ -n "$VERSION" ] || error "Impossibile leggere la versione da ${PROJECT_DIR}/pom.xml"
+JAR_NAME="XmlEditor-${VERSION}.jar"
 
 echo -e "${BOLD}"
 echo "╔══════════════════════════════════════════╗"
@@ -76,8 +83,10 @@ success "Build completata → target/${JAR_NAME}"
 # ── Installazione file ───────────────────────────────────────
 info "Installazione in ${INSTALL_DIR}…"
 mkdir -p "$INSTALL_DIR"
-cp "target/${JAR_NAME}" "${INSTALL_DIR}/${JAR_NAME}"
-success "JAR copiato"
+# Via i jar delle versioni precedenti, altrimenti si accumulano a ogni upgrade
+rm -f "${INSTALL_DIR}"/XmlEditor-*.jar
+cp "target/${JAR_NAME}" "$INSTALLED_JAR"
+success "JAR copiato (${JAR_NAME} → ${APP_ID}.jar)"
 
 # ── Installazione JavaFX JARs ─────────────────────────────────
 info "Installazione librerie JavaFX…"
@@ -120,7 +129,7 @@ exec java \
     --add-modules javafx.controls,javafx.fxml \
     --add-opens=javafx.graphics/com.sun.glass.ui=ALL-UNNAMED \
     --add-opens=javafx.base/com.sun.javafx.runtime=ALL-UNNAMED \
-    -cp "/opt/xmleditor/XmlEditor-2.0.0.jar${CP_EXTRA}" \
+    -cp "/opt/xmleditor/xmleditor.jar${CP_EXTRA}" \
     it.touchinformatica.xmleditor.MainApp "$@"
 LAUNCHER
 chmod +x "$BIN_LINK"

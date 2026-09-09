@@ -48,7 +48,7 @@ public class XsdFolderManager {
      */
     public void setXsdFolder(Path folder) {
         if (folder != null && !Files.isDirectory(folder)) {
-            throw new IllegalArgumentException("Il path specificato non è una directory: " + folder);
+            throw new IllegalArgumentException("The specified path is not a directory: " + folder);
         }
         this.xsdFolder = folder;
         save();
