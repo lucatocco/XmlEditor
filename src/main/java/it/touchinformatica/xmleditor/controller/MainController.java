@@ -2,6 +2,7 @@ package it.touchinformatica.xmleditor.controller;
 
 import it.touchinformatica.xmleditor.model.XmlDocument;
 import it.touchinformatica.xmleditor.service.XmlService;
+import it.touchinformatica.xmleditor.util.I18n;
 import it.touchinformatica.xmleditor.util.LastPositionManager;
 import it.touchinformatica.xmleditor.util.RecentFilesManager;
 import it.touchinformatica.xmleditor.util.XsdFolderManager;
@@ -90,10 +91,16 @@ public class MainController {
         int para = editorPane.getCodeArea().getCurrentParagraph();
         int col  = editorPane.getCodeArea().getCaretColumn();
         int tot  = editorPane.getLineCount();
-        statusBar.setStatus("Line " + (para + 1) + ":" + (col + 1)
-            + "  |  Lines: " + tot
-            + "  |  " + editorPane.getEncoding()
-            + "  |  " + editorPane.getLineEnding());
+        statusBar.setStatus(I18n.t("status.caret", para + 1, col + 1, tot,
+            editorPane.getEncoding(), editorPane.getLineEnding()));
+    }
+
+    /** Ricarica i testi dipendenti dalla lingua dopo un cambio. */
+    public void applyLanguage() {
+        if (currentDoc == null || currentDoc.getFilePath() == null) {
+            updateTabTitle.accept(I18n.t("doc.untitled"));
+        }
+        refreshStatus();
     }
 
     /** Finestra a cui agganciare i dialoghi, così non finiscono dietro l'applicazione. */
@@ -120,9 +127,9 @@ public class MainController {
         editorPane.newDocument();
         treePane.clear();
         currentDoc = null;
-        updateTabTitle.accept("Untitled");
-        logPane.log("New document", "info");
-        statusBar.setStatus("Ready");
+        updateTabTitle.accept(I18n.t("doc.untitled"));
+        logPane.log(I18n.t("log.newDocument"), "info");
+        statusBar.setStatus(I18n.t("status.ready"));
     }
 
     // ──────────────────────────────────────────────
@@ -145,7 +152,7 @@ public class MainController {
             lastPosMgr.savePosition(currentDoc.getFilePath(),
                 editorPane.getCodeArea().getCurrentParagraph() + 1);
         }
-        statusBar.setStatus("Loading " + path.getFileName() + "…");
+        statusBar.setStatus(I18n.t("log.loading", path.getFileName()));
         Thread.ofVirtual().start(() -> {
             try {
                 String size = humanSize(Files.size(path));
@@ -156,7 +163,7 @@ public class MainController {
                 try {
                     raw = Files.readString(path, requested);
                 } catch (CharacterCodingException e) {
-                    warning = "Not valid " + requested.name() + ": reopened as ISO-8859-1";
+                    warning = I18n.t("log.encodingFallback", requested.name());
                     requested = StandardCharsets.ISO_8859_1;
                     raw = Files.readString(path, requested);
                 }
@@ -171,10 +178,8 @@ public class MainController {
                     editorPane.setEncoding(used.name());
                     editorPane.setLineEnding(le);
                     updateTabTitle.accept(path.getFileName().toString());
-                    statusBar.setStatus("Opened: " + path.getFileName()
-                        + " (" + size + ")  |  " + used.name() + "  |  " + le);
-                    logPane.log("Loaded: " + path + " (" + size + ")  ["
-                        + used.name() + ", " + le + "]", "ok");
+                    statusBar.setStatus(I18n.t("log.opened", path.getFileName(), size, used.name(), le));
+                    logPane.log(I18n.t("log.loaded", path, size, used.name(), le), "ok");
                     if (note != null) logPane.log(note, "warn");
                     recentMgr.add(path);
                     refreshRecentMenu.accept(recentMgr.getRecentFiles());
@@ -183,7 +188,7 @@ public class MainController {
                     if (savedLine > 1) editorPane.goToLine(savedLine);
                 });
             } catch (IOException e) {
-                Platform.runLater(() -> logPane.log("Error opening file: " + e.getMessage(), "error"));
+                Platform.runLater(() -> logPane.log(I18n.t("log.openError", e.getMessage()), "error"));
             }
         });
     }
@@ -221,8 +226,8 @@ public class MainController {
 
     private boolean saveFileAs(boolean blocking) {
         FileChooser fc = new FileChooser();
-        fc.setTitle("Save XML File");
-        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("XML Files", "*.xml"));
+        fc.setTitle(I18n.t("filechooser.save"));
+        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(I18n.t("filter.xml"), "*.xml"));
         File file = fc.showSaveDialog(owner());
         if (file == null) return false;
         return writeToDisk(file.toPath(), blocking);
@@ -242,7 +247,7 @@ public class MainController {
                 onSaved(path, content);
                 return true;
             } catch (IOException e) {
-                logPane.log("Error saving file: " + e.getMessage(), "error");
+                logPane.log(I18n.t("log.saveError", e.getMessage()), "error");
                 return false;
             }
         }
@@ -252,7 +257,7 @@ public class MainController {
                 writeAtomically(path, content, charset);
                 Platform.runLater(() -> onSaved(path, content));
             } catch (IOException e) {
-                Platform.runLater(() -> logPane.log("Error saving file: " + e.getMessage(), "error"));
+                Platform.runLater(() -> logPane.log(I18n.t("log.saveError", e.getMessage()), "error"));
             }
         });
         return true;
@@ -264,8 +269,8 @@ public class MainController {
         else { currentDoc.setFilePath(path); currentDoc.markSaved(); }
         editorPane.markSaved();
         updateTabTitle.accept(path.getFileName().toString());
-        statusBar.setStatus("Saved: " + path);
-        logPane.log("Saved: " + path, "ok");
+        statusBar.setStatus(I18n.t("log.saved", path));
+        logPane.log(I18n.t("log.saved", path), "ok");
         recentMgr.add(path);
         refreshRecentMenu.accept(recentMgr.getRecentFiles());
     }
@@ -304,7 +309,7 @@ public class MainController {
     public void prettyPrint() {
         String  content = editorPane.getText();
         Charset charset = editorPane.getCharset();
-        statusBar.setStatus("Pretty printing…");
+        statusBar.setStatus(I18n.t("log.prettyPrinting"));
         Thread.ofVirtual().start(() -> {
             try {
                 String formatted = xmlService.prettyPrint(content, charset);
@@ -312,14 +317,14 @@ public class MainController {
                     // replaceText e non setText: il pretty print resta annullabile
                     // e il documento risulta modificato finché non lo salvi
                     editorPane.replaceText(formatted);
-                    statusBar.setStatus("Pretty print complete");
-                    logPane.log("Pretty print complete", "ok");
+                    statusBar.setStatus(I18n.t("log.prettyPrintDone"));
+                    logPane.log(I18n.t("log.prettyPrintDone"), "ok");
                     rebuildTree(formatted);
                 });
             } catch (Exception e) {
                 Platform.runLater(() -> {
-                    logPane.log("XML error: " + e.getMessage(), "error");
-                    statusBar.setStatus("Pretty print failed");
+                    logPane.log(I18n.t("log.xmlError", e.getMessage()), "error");
+                    statusBar.setStatus(I18n.t("log.prettyPrintFailed"));
                 });
             }
         });
@@ -335,15 +340,14 @@ public class MainController {
      */
     public void setXsdFolder() {
         DirectoryChooser dc = new DirectoryChooser();
-        dc.setTitle("Select XSD Folder");
+        dc.setTitle(I18n.t("filechooser.xsdFolder"));
         xsdFolderMgr.getXsdFolder().ifPresent(f -> dc.setInitialDirectory(f.toFile()));
         File dir = dc.showDialog(owner());
         if (dir == null) return;
         xsdFolderMgr.setXsdFolder(dir.toPath());
         int count = xsdFolderMgr.listAvailableSchemas().size();
-        logPane.log("XSD folder set: " + dir.getAbsolutePath()
-            + "  (" + count + " schema(s) found)", "ok");
-        statusBar.setStatus("XSD folder: " + dir.getName() + " (" + count + " XSD)");
+        logPane.log(I18n.t("log.xsdFolderSet", dir.getAbsolutePath(), count), "ok");
+        statusBar.setStatus(I18n.t("status.xsdFolder", dir.getName(), count));
     }
 
     /**
@@ -352,13 +356,13 @@ public class MainController {
      */
     public void loadXsd() {
         FileChooser fc = new FileChooser();
-        fc.setTitle("Load XSD Schema");
-        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("XSD Schema", "*.xsd"));
+        fc.setTitle(I18n.t("filechooser.loadXsd"));
+        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(I18n.t("filter.xsd"), "*.xsd"));
         xsdFolderMgr.getXsdFolder().ifPresent(f -> fc.setInitialDirectory(f.toFile()));
         File file = fc.showOpenDialog(owner());
         if (file == null) return;
         currentXsdPath = file.toPath();
-        logPane.log("XSD schema loaded manually: " + file.getName(), "ok");
+        logPane.log(I18n.t("log.xsdLoaded", file.getName()), "ok");
         statusBar.setStatus("XSD: " + file.getName());
     }
 
@@ -375,7 +379,7 @@ public class MainController {
             if (schemaLocationXsd != null) {
                 xsdToUse = xsdFolderMgr.findMatchingSchema(schemaLocationXsd).orElse(null);
                 if (xsdToUse != null) {
-                    logPane.log("Schema found via schemaLocation: " + xsdToUse.getFileName(), "ok");
+                    logPane.log(I18n.t("log.schemaBySchemaLocation", xsdToUse.getFileName()), "ok");
                 }
             }
 
@@ -387,7 +391,7 @@ public class MainController {
                 if (xmlFileName != null) {
                     xsdToUse = xsdFolderMgr.findMatchingSchema(xmlFileName).orElse(null);
                     if (xsdToUse != null) {
-                        logPane.log("Schema found by file name: " + xsdToUse.getFileName(), "ok");
+                        logPane.log(I18n.t("log.schemaByFileName", xsdToUse.getFileName()), "ok");
                     }
                 }
             }
@@ -396,7 +400,7 @@ public class MainController {
             if (xsdToUse == null) {
                 List<Path> available = xsdFolderMgr.listAvailableSchemas();
                 if (available.isEmpty()) {
-                    logPane.log("XSD folder is configured but contains no .xsd files", "warn");
+                    logPane.log(I18n.t("log.xsdFolderEmpty"), "warn");
                     return;
                 }
                 xsdToUse = showXsdPickerDialog(available);
@@ -405,30 +409,30 @@ public class MainController {
         }
 
         if (xsdToUse == null) {
-            logPane.log("No XSD schema available. "
-                + "Use 'Set XSD Folder' or 'Load Single XSD' from the XML menu.", "warn");
+            logPane.log(I18n.t("log.noSchema"), "warn");
             return;
         }
 
         final Path finalXsd = xsdToUse;
         String content = editorPane.getText();
-        statusBar.setStatus("Validating against " + finalXsd.getFileName() + "…");
+        statusBar.setStatus(I18n.t("log.validating", finalXsd.getFileName()));
         Thread.ofVirtual().start(() -> {
             XmlService.ValidationResult result = xmlService.validate(content, finalXsd);
             Platform.runLater(() -> {
                 if (result.valid()) {
-                    logPane.log("✔ Document is valid  [" + finalXsd.getFileName() + "]", "ok");
-                    statusBar.setStatus("Validation: OK ✔");
+                    logPane.log(I18n.t("log.valid", finalXsd.getFileName()), "ok");
+                    statusBar.setStatus(I18n.t("status.validationOk"));
                 } else {
-                    logPane.log("Validation failed against [" + finalXsd.getFileName() + "] — "
-                        + result.errors().size() + " error(s):", "error");
+                    logPane.log(I18n.t("log.validationFailed",
+                        finalXsd.getFileName(), result.errors().size()), "error");
                     result.errors().forEach(err ->
-                        logPane.log("  [" + (err.fatal() ? "FATAL" : "ERROR") + "] "
-                            + "Line " + err.line() + ", Col " + err.column() + ": " + err.message(), "error")
+                        logPane.log(I18n.t("log.validationError",
+                            I18n.t(err.fatal() ? "error.fatal" : "error.error"),
+                            err.line(), err.column(), err.message()), "error")
                     );
                     if (!result.errors().isEmpty())
                         editorPane.goToLine(result.errors().get(0).line());
-                    statusBar.setStatus("Validation: " + result.errors().size() + " error(s) ✖");
+                    statusBar.setStatus(I18n.t("status.validationFailed", result.errors().size()));
                 }
             });
         });
@@ -447,9 +451,9 @@ public class MainController {
             .toList();
 
         ChoiceDialog<String> dialog = new ChoiceDialog<>(names.get(0), names);
-        dialog.setTitle("Choose XSD Schema");
-        dialog.setHeaderText("No schema automatically matches the current file.");
-        dialog.setContentText("XSD schema to use:");
+        dialog.setTitle(I18n.t("dialog.xsdPicker.title"));
+        dialog.setHeaderText(I18n.t("dialog.xsdPicker.header"));
+        dialog.setContentText(I18n.t("dialog.xsdPicker.content"));
 
         return dialog.showAndWait()
             .map(chosen -> available.get(names.indexOf(chosen)))
@@ -514,12 +518,12 @@ public class MainController {
 
     public void showGoToLine() {
         TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Go to Line");
-        dialog.setHeaderText("Line (1 - " + editorPane.getLineCount() + "):");
-        dialog.setContentText("Line:");
+        dialog.setTitle(I18n.t("dialog.goToLine.title"));
+        dialog.setHeaderText(I18n.t("dialog.goToLine.header", editorPane.getLineCount()));
+        dialog.setContentText(I18n.t("dialog.goToLine.content"));
         dialog.showAndWait().ifPresent(val -> {
             try { editorPane.goToLine(Integer.parseInt(val.trim())); }
-            catch (NumberFormatException e) { logPane.log("Invalid line number: " + val, "warn"); }
+            catch (NumberFormatException e) { logPane.log(I18n.t("log.invalidLine", val), "warn"); }
         });
     }
 
@@ -530,14 +534,14 @@ public class MainController {
     public void reloadWithEncoding(String enc) {
         if (currentDoc == null || currentDoc.getFilePath() == null) {
             editorPane.setEncoding(enc);
-            statusBar.setStatus("Encoding: " + enc);
+            statusBar.setStatus(I18n.t("menu.view.encoding") + ": " + enc);
             return;
         }
         // confirmDiscardChanges() ora attende la fine della scrittura, quindi la
         // rilettura non può più incrociare un salvataggio ancora in corso
         if (!confirmDiscardChanges()) return;
         try { openPath(currentDoc.getFilePath(), Charset.forName(enc)); }
-        catch (Exception e) { logPane.log("Invalid encoding: " + enc, "error"); }
+        catch (Exception e) { logPane.log(I18n.t("log.invalidEncoding", enc), "error"); }
     }
 
     // ──────────────────────────────────────────────
@@ -548,16 +552,16 @@ public class MainController {
         if (!editorPane.isModified()) return true;
 
         String fileName = (currentDoc != null && currentDoc.getFilePath() != null)
-            ? currentDoc.getFileName() : "Untitled";
+            ? currentDoc.getFileName() : I18n.t("doc.untitled");
 
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Unsaved Changes");
-        alert.setHeaderText("\"" + fileName + "\" has unsaved changes.");
-        alert.setContentText("Do you want to save before continuing?");
+        alert.setTitle(I18n.t("dialog.unsaved.title"));
+        alert.setHeaderText(I18n.t("dialog.unsaved.header", fileName));
+        alert.setContentText(I18n.t("dialog.unsaved.content"));
 
-        ButtonType btnSalva   = new ButtonType("Save");
-        ButtonType btnScarta  = new ButtonType("Don't Save");
-        ButtonType btnAnnulla = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType btnSalva   = new ButtonType(I18n.t("dialog.unsaved.save"));
+        ButtonType btnScarta  = new ButtonType(I18n.t("dialog.unsaved.dontSave"));
+        ButtonType btnAnnulla = new ButtonType(I18n.t("dialog.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
         alert.getButtonTypes().setAll(btnSalva, btnScarta, btnAnnulla);
 
         Optional<ButtonType> result = alert.showAndWait();
@@ -574,7 +578,7 @@ public class MainController {
 
     private void rebuildTree(String xmlText) {
         treePane.rebuildFrom(xmlText,
-            () -> logPane.log("Tree unavailable (XML is not well-formed)", "warn"));
+            () -> logPane.log(I18n.t("log.treeUnavailable"), "warn"));
     }
 
     // ──────────────────────────────────────────────

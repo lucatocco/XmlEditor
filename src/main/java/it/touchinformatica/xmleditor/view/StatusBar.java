@@ -1,5 +1,6 @@
 package it.touchinformatica.xmleditor.view;
 
+import it.touchinformatica.xmleditor.util.I18n;
 import javafx.application.Platform;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
@@ -10,7 +11,7 @@ public class StatusBar extends HBox {
     private final Label label;
 
     public StatusBar() {
-        label = new Label("Ready");
+        label = new Label(I18n.t("status.ready"));
         label.getStyleClass().add("status-label");
         HBox.setHgrow(label, Priority.ALWAYS);
         getChildren().add(label);

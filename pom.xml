@@ -46,6 +46,14 @@
             <version>${javafx.version}</version>
             <classifier>${javafx.platform}</classifier>
         </dependency>
+        <!-- JUnit 5: test della logica XML e delle utility -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- RichTextFX: syntax highlighting XML nell'editor -->
         <dependency>
             <groupId>org.fxmisc.richtext</groupId>
@@ -93,6 +101,17 @@
                 <configuration>
                     <source>21</source>
                     <target>21</target>
+                </configuration>
+            </plugin>
+
+            <!-- Test: girano sul classpath, non sul module-path.
+                 Il progetto è modulare ma i test non hanno un module-info proprio. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <useModulePath>false</useModulePath>
                 </configuration>
             </plugin>
 

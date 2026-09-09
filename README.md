@@ -48,6 +48,11 @@ Each tab is an independent session with its own editor, tree, log and document s
 | Find (with previous/next navigation) | Ctrl+F |
 | Go to line | Ctrl+G |
 
+### Settings
+- **Language** — Settings → Language switches the whole interface between
+  **English** and **Italiano** immediately, without restarting. The choice is
+  remembered; on first run the application follows your system language.
+
 ### View
 - **Word wrap** — toggle in the View menu, remembered per tab
 - **Encoding** — the encoding is detected when a file is opened, from its byte order
@@ -116,6 +121,7 @@ XmlEditor/
     │       ├── service/XmlService.java          ← pretty print + XSD validation (JDK only)
     │       ├── util/
     │       │   ├── AppInfo.java                 ← reads name and version at runtime
+    │       │   ├── I18n.java                    ← interface texts, English/Italian
     │       │   ├── XmlSyntaxHighlighter.java
     │       │   ├── RecentFilesManager.java
     │       │   ├── LastPositionManager.java
@@ -131,8 +137,14 @@ XmlEditor/
     │       └── controller/MainController.java   ← one controller per tab
     └── resources/it/touchinformatica/xmleditor/
         ├── app.properties                       ← filtered by Maven, carries the version
+        ├── i18n/
+        │   ├── messages.properties              ← English (base language)
+        │   └── messages_it.properties           ← Italian
         └── css/editor.css
 ```
+
+Adding a language means adding one `messages_<code>.properties` next to these and one
+entry in `I18n.AVAILABLE`; `I18nTest` then checks it against the English catalog.
 
 ---
 
@@ -142,6 +154,20 @@ XmlEditor/
 java -version   # Java 21+
 mvn -version    # Maven 3.8+
 ```
+
+---
+
+## Tests
+
+```bash
+mvn test
+```
+
+The suite covers the logic that has actually broken documents in the past: pretty
+print idempotency, whitespace handling for mixed content and CDATA, encoding of
+non-UTF-8 files, XSD schema lookup, and the translation catalogs — a key present in
+one language but missing in the other fails the build. Tests also run in CI before
+the MSI is built.
 
 ---
 

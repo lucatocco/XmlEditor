@@ -2,6 +2,7 @@ package it.touchinformatica.xmleditor.view;
 
 import it.touchinformatica.xmleditor.controller.MainController;
 import it.touchinformatica.xmleditor.service.XmlService;
+import it.touchinformatica.xmleditor.util.I18n;
 import it.touchinformatica.xmleditor.util.RecentFilesManager;
 import it.touchinformatica.xmleditor.util.XsdFolderManager;
 import javafx.geometry.Orientation;
@@ -77,7 +78,7 @@ public class EditorSession {
         this.tab = new Tab();
         this.tab.setContent(content);
         this.tab.setUserData(this);   // ← fondamentale per activeSession()
-        updateTabTitle("Untitled");
+        updateTabTitle(I18n.t("doc.untitled"));
 
         // Asterisco nel titolo quando modificato
         editorPane.modifiedProperty().addListener((obs, old, modified) -> {
@@ -101,7 +102,9 @@ public class EditorSession {
     // ──────────────────────────────────────────────
 
     private void updateTabTitle(String fileName) {
-        tab.setText(fileName);
+        // L'asterisco delle modifiche non salvate va conservato: chi riscrive il
+        // titolo (salvataggio, cambio lingua) non deve farlo sparire
+        tab.setText(editorPane.isModified() ? "* " + fileName : fileName);
     }
 
     // ──────────────────────────────────────────────
@@ -117,6 +120,14 @@ public class EditorSession {
 
     /** Rilascia le risorse del tab (thread del syntax highlighting). */
     public void dispose() { editorPane.dispose(); }
+
+    /** Ricarica i testi del tab dopo un cambio di lingua. */
+    public void applyLanguage() {
+        treePane.applyLanguage();
+        logPane.applyLanguage();
+        searchBar.applyLanguage();
+        controller.applyLanguage();
+    }
 
     public void openPath(Path path) { controller.openPath(path); }
 }

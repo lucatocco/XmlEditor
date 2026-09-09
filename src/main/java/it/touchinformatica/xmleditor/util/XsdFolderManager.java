@@ -22,6 +22,7 @@ import java.util.stream.Stream;
  */
 public class XsdFolderManager {
 
+
     private static final String PREF_KEY = "xsd_folder";
 
     private final Preferences prefs;
@@ -48,7 +49,7 @@ public class XsdFolderManager {
      */
     public void setXsdFolder(Path folder) {
         if (folder != null && !Files.isDirectory(folder)) {
-            throw new IllegalArgumentException("The specified path is not a directory: " + folder);
+            throw new IllegalArgumentException(I18n.t("error.notADirectory", folder));
         }
         this.xsdFolder = folder;
         save();

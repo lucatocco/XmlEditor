@@ -68,6 +68,13 @@ public class XmlService {
         factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
 
         DocumentBuilder builder = factory.newDocumentBuilder();
+        // Senza handler il parser stampa l'errore su stderr prima ancora che
+        // il chiamante possa gestirlo: qui l'eccezione basta e avanza.
+        builder.setErrorHandler(new org.xml.sax.ErrorHandler() {
+            @Override public void warning(SAXParseException e) { }
+            @Override public void error(SAXParseException e) throws SAXException { throw e; }
+            @Override public void fatalError(SAXParseException e) throws SAXException { throw e; }
+        });
         Document doc = builder.parse(new InputSource(new StringReader(xmlText)));
         doc.normalize();
 

@@ -2,6 +2,7 @@ package it.touchinformatica.xmleditor.view;
 
 import it.touchinformatica.xmleditor.service.XmlService;
 import it.touchinformatica.xmleditor.util.AppInfo;
+import it.touchinformatica.xmleditor.util.I18n;
 import it.touchinformatica.xmleditor.util.RecentFilesManager;
 import it.touchinformatica.xmleditor.util.XsdFolderManager;
 import javafx.application.Platform;
@@ -38,6 +39,7 @@ public class MainStage {
 
     private Menu menuRecenti;
     private CheckMenuItem miWrap;   // stato globale, va riallineato al tab attivo
+    private BorderPane root;        // serve per rifare menu e toolbar al cambio lingua
 
     public MainStage(Stage stage) {
         this(stage, List.of(), null);
@@ -135,10 +137,10 @@ public class MainStage {
      */
     public void openFile() {
         FileChooser fc = new FileChooser();
-        fc.setTitle("Open XML File");
+        fc.setTitle(I18n.t("filechooser.open"));
         fc.getExtensionFilters().addAll(
-            new FileChooser.ExtensionFilter("File XML/XSD/TXT", "*.xml", "*.xsd", "*.txt"),
-            new FileChooser.ExtensionFilter("All Files", "*.*")
+            new FileChooser.ExtensionFilter(I18n.t("filter.xmlXsdTxt"), "*.xml", "*.xsd", "*.txt"),
+            new FileChooser.ExtensionFilter(I18n.t("filter.allFiles"), "*.*")
         );
         List<File> files = fc.showOpenMultipleDialog(stage);
         if (files == null || files.isEmpty()) return;
@@ -164,12 +166,12 @@ public class MainStage {
         if (!isEmpty && isModified) {
             // Chiedi: nuovo tab o sostituire?
             Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-            alert.setTitle("Open File");
-            alert.setHeaderText("The current tab has unsaved changes.");
-            alert.setContentText("Open the file in a new tab, or replace the current one?");
-            ButtonType btnNuovo     = new ButtonType("New Tab");
-            ButtonType btnSostituisci = new ButtonType("Replace");
-            ButtonType btnAnnulla   = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+            alert.setTitle(I18n.t("dialog.open.title"));
+            alert.setHeaderText(I18n.t("dialog.open.header"));
+            alert.setContentText(I18n.t("dialog.open.content"));
+            ButtonType btnNuovo     = new ButtonType(I18n.t("dialog.open.newTab"));
+            ButtonType btnSostituisci = new ButtonType(I18n.t("dialog.open.replace"));
+            ButtonType btnAnnulla   = new ButtonType(I18n.t("dialog.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
             alert.getButtonTypes().setAll(btnNuovo, btnSostituisci, btnAnnulla);
 
             Optional<ButtonType> result = alert.showAndWait();
@@ -229,7 +231,7 @@ public class MainStage {
         MenuBar menuBar = buildMenuBar();
         ToolBar toolBar = buildToolBar();
 
-        BorderPane root = new BorderPane();
+        root = new BorderPane();
         root.setTop(new VBox(menuBar, toolBar));
         root.setCenter(tabPane);
         root.setBottom(statusBar);
@@ -265,16 +267,16 @@ public class MainStage {
 
     private MenuBar buildMenuBar() {
         // ── File ──
-        MenuItem miNuovoTab = menuItem("New Tab",          "Ctrl+T",           () -> newTab());
-        MenuItem miNuovo    = menuItem("New Document",     "Ctrl+N",           () -> withActive(s -> s.getController().newFile()));
-        MenuItem miApri     = menuItem("Open…",            "Ctrl+O",           this::openFile);
-        MenuItem miSalva    = menuItem("Save",             "Ctrl+S",           () -> withActive(s -> s.getController().saveFile()));
-        MenuItem miSalvaAs  = menuItem("Save As…",         "Ctrl+Shift+S",     () -> withActive(s -> s.getController().saveFileAs()));
-        menuRecenti         = new Menu("Recent Files");
-        MenuItem miChiudiTab= menuItem("Close Tab",        "Ctrl+W",           this::closeCurrentTab);
-        MenuItem miEsci     = menuItem("Exit",             "Alt+F4",           () -> stage.fireEvent(new javafx.stage.WindowEvent(stage, javafx.stage.WindowEvent.WINDOW_CLOSE_REQUEST)));
+        MenuItem miNuovoTab = menuItem(I18n.t("menu.file.newTab"), "Ctrl+T",           () -> newTab());
+        MenuItem miNuovo    = menuItem(I18n.t("menu.file.newDocument"), "Ctrl+N",           () -> withActive(s -> s.getController().newFile()));
+        MenuItem miApri     = menuItem(I18n.t("menu.file.open"), "Ctrl+O",           this::openFile);
+        MenuItem miSalva    = menuItem(I18n.t("menu.file.save"), "Ctrl+S",           () -> withActive(s -> s.getController().saveFile()));
+        MenuItem miSalvaAs  = menuItem(I18n.t("menu.file.saveAs"), "Ctrl+Shift+S",     () -> withActive(s -> s.getController().saveFileAs()));
+        menuRecenti         = new Menu(I18n.t("menu.file.recent"));
+        MenuItem miChiudiTab= menuItem(I18n.t("menu.file.closeTab"), "Ctrl+W",           this::closeCurrentTab);
+        MenuItem miEsci     = menuItem(I18n.t("menu.file.exit"), "Alt+F4",           () -> stage.fireEvent(new javafx.stage.WindowEvent(stage, javafx.stage.WindowEvent.WINDOW_CLOSE_REQUEST)));
 
-        Menu menuFile = new Menu("File");
+        Menu menuFile = new Menu(I18n.t("menu.file"));
         menuFile.getItems().addAll(
             miNuovoTab, miNuovo, miApri, new SeparatorMenuItem(),
             miSalva, miSalvaAs, new SeparatorMenuItem(),
@@ -283,16 +285,16 @@ public class MainStage {
         );
 
         // ── Modifica ──
-        MenuItem miUndo     = menuItem("Undo",              "Ctrl+Z",           () -> withActive(s -> s.getEditorPane().undo()));
-        MenuItem miRedo     = menuItem("Redo",              "Ctrl+Shift+Z",     () -> withActive(s -> s.getEditorPane().redo()));
-        MenuItem miTaglia   = menuItem("Cut",               "Ctrl+X",           () -> withActive(s -> s.getEditorPane().cut()));
-        MenuItem miCopia    = menuItem("Copy",              "Ctrl+C",           () -> withActive(s -> s.getEditorPane().copy()));
-        MenuItem miIncolla  = menuItem("Paste",             "Ctrl+V",           () -> withActive(s -> s.getEditorPane().paste()));
-        MenuItem miSelTutto = menuItem("Select All",        "Ctrl+A",           () -> withActive(s -> s.getEditorPane().selectAll()));
-        MenuItem miVaiRiga  = menuItem("Go to Line…",       "Ctrl+G",           () -> withActive(s -> s.getController().showGoToLine()));
-        MenuItem miCerca    = menuItem("Find…",             "Ctrl+F",           () -> withActive(s -> s.getController().toggleSearch()));
+        MenuItem miUndo     = menuItem(I18n.t("menu.edit.undo"), "Ctrl+Z",           () -> withActive(s -> s.getEditorPane().undo()));
+        MenuItem miRedo     = menuItem(I18n.t("menu.edit.redo"), "Ctrl+Shift+Z",     () -> withActive(s -> s.getEditorPane().redo()));
+        MenuItem miTaglia   = menuItem(I18n.t("menu.edit.cut"), "Ctrl+X",           () -> withActive(s -> s.getEditorPane().cut()));
+        MenuItem miCopia    = menuItem(I18n.t("menu.edit.copy"), "Ctrl+C",           () -> withActive(s -> s.getEditorPane().copy()));
+        MenuItem miIncolla  = menuItem(I18n.t("menu.edit.paste"), "Ctrl+V",           () -> withActive(s -> s.getEditorPane().paste()));
+        MenuItem miSelTutto = menuItem(I18n.t("menu.edit.selectAll"), "Ctrl+A",           () -> withActive(s -> s.getEditorPane().selectAll()));
+        MenuItem miVaiRiga  = menuItem(I18n.t("menu.edit.goToLine"), "Ctrl+G",           () -> withActive(s -> s.getController().showGoToLine()));
+        MenuItem miCerca    = menuItem(I18n.t("menu.edit.find"), "Ctrl+F",           () -> withActive(s -> s.getController().toggleSearch()));
 
-        Menu menuModifica = new Menu("Edit");
+        Menu menuModifica = new Menu(I18n.t("menu.edit"));
         menuModifica.getItems().addAll(
             miUndo, miRedo, new SeparatorMenuItem(),
             miTaglia, miCopia, miIncolla, new SeparatorMenuItem(),
@@ -301,29 +303,31 @@ public class MainStage {
         );
 
         // ── Visualizza ──
-        MenuItem miTabPrev  = menuItem("Previous Tab",      "Ctrl+Shift+Tab",   this::selectPrevTab);
-        MenuItem miTabNext  = menuItem("Next Tab",          "Ctrl+Tab",         this::selectNextTab);
-        miWrap = new CheckMenuItem("Word Wrap");
+        MenuItem miTabPrev  = menuItem(I18n.t("menu.view.prevTab"), "Ctrl+Shift+Tab",   this::selectPrevTab);
+        MenuItem miTabNext  = menuItem(I18n.t("menu.view.nextTab"), "Ctrl+Tab",         this::selectNextTab);
+        miWrap = new CheckMenuItem(I18n.t("menu.view.wordWrap"));
+        EditorSession activeForWrap = activeSession();
+        if (activeForWrap != null) miWrap.setSelected(activeForWrap.getEditorPane().isWordWrap());
         miWrap.setOnAction(e -> withActive(s -> s.getEditorPane().setWordWrap(miWrap.isSelected())));
 
-        Menu menuEncoding = new Menu("Encoding");
+        Menu menuEncoding = new Menu(I18n.t("menu.view.encoding"));
         for (String enc : List.of("UTF-8", "ISO-8859-1", "UTF-16", "Windows-1252")) {
             MenuItem mi = new MenuItem(enc);
             mi.setOnAction(e -> withActive(s -> s.getController().reloadWithEncoding(enc)));
             menuEncoding.getItems().add(mi);
         }
 
-        Menu menuVisualizza = new Menu("View");
+        Menu menuVisualizza = new Menu(I18n.t("menu.view"));
         menuVisualizza.getItems().addAll(miTabPrev, miTabNext, new SeparatorMenuItem(), miWrap, new SeparatorMenuItem(), menuEncoding);
 
         // ── XML ──
-        MenuItem miPretty     = menuItem("Pretty Print",        "Ctrl+P",  () -> withActive(s -> s.getController().prettyPrint()));
-        MenuItem miXsdFolder  = menuItem("Set XSD Folder…",   null,      () -> withActive(s -> s.getController().setXsdFolder()));
-        MenuItem miXsd        = menuItem("Load Single XSD…",  null,      () -> withActive(s -> s.getController().loadXsd()));
-        MenuItem miValida     = menuItem("Validate XSD",      "Ctrl+E",  () -> withActive(s -> s.getController().validate()));
-        MenuItem miXsdInfo    = menuItem("XSD Folder Info",   null,      this::showXsdFolderInfo);
+        MenuItem miPretty     = menuItem(I18n.t("menu.xml.prettyPrint"), "Ctrl+P",  () -> withActive(s -> s.getController().prettyPrint()));
+        MenuItem miXsdFolder  = menuItem(I18n.t("menu.xml.setXsdFolder"), null, () -> withActive(s -> s.getController().setXsdFolder()));
+        MenuItem miXsd        = menuItem(I18n.t("menu.xml.loadXsd"), null, () -> withActive(s -> s.getController().loadXsd()));
+        MenuItem miValida     = menuItem(I18n.t("menu.xml.validate"), "Ctrl+E",  () -> withActive(s -> s.getController().validate()));
+        MenuItem miXsdInfo    = menuItem(I18n.t("menu.xml.xsdFolderInfo"), null, this::showXsdFolderInfo);
 
-        Menu menuXml = new Menu("XML");
+        Menu menuXml = new Menu(I18n.t("menu.xml"));
         menuXml.getItems().addAll(
             miPretty,
             new SeparatorMenuItem(),
@@ -332,13 +336,48 @@ public class MainStage {
             miXsd, miValida
         );
 
-        MenuItem miAbout = menuItem("About…", null, this::showAbout);
-        Menu menuAiuto = new Menu("Help");
+        MenuItem miAbout = menuItem(I18n.t("menu.help.about"), null, this::showAbout);
+        Menu menuAiuto = new Menu(I18n.t("menu.help"));
         menuAiuto.getItems().add(miAbout);
 
         refreshRecentMenu(recentMgr.getRecentFiles());
         updateXsdFolderStatus();
-        return new MenuBar(menuFile, menuModifica, menuVisualizza, menuXml, menuAiuto);
+        return new MenuBar(menuFile, menuModifica, menuVisualizza, menuXml, buildSettingsMenu(), menuAiuto);
+    }
+
+    /** Menu Impostazioni: per ora contiene solo la scelta della lingua. */
+    private Menu buildSettingsMenu() {
+        Menu menuLingua = new Menu(I18n.t("menu.settings.language"));
+        ToggleGroup gruppo = new ToggleGroup();
+        for (I18n.Language lang : I18n.AVAILABLE) {
+            RadioMenuItem item = new RadioMenuItem(lang.label());
+            item.setToggleGroup(gruppo);
+            item.setSelected(lang.code().equals(I18n.getLanguage()));
+            item.setOnAction(e -> changeLanguage(lang.code()));
+            menuLingua.getItems().add(item);
+        }
+        Menu menuSettings = new Menu(I18n.t("menu.settings"));
+        menuSettings.getItems().add(menuLingua);
+        return menuSettings;
+    }
+
+    /** Cambia lingua e aggiorna subito l'interfaccia, senza riavviare. */
+    private void changeLanguage(String code) {
+        if (!I18n.setLanguage(code)) return;
+        applyLanguage();
+    }
+
+    private void applyLanguage() {
+        // Menu e toolbar si ricostruiscono da zero: è più semplice e sicuro che
+        // rincorrere ogni etichetta, e la scena resta la stessa.
+        root.setTop(new VBox(buildMenuBar(), buildToolBar()));
+        setupAccelerators();
+
+        for (Tab tab : tabPane.getTabs()) {
+            if (tab.getUserData() instanceof EditorSession s) s.applyLanguage();
+        }
+        Tab selected = tabPane.getSelectionModel().getSelectedItem();
+        if (selected != null) updateWindowTitle(selected.getText());
     }
 
     // ──────────────────────────────────────────────
@@ -347,19 +386,19 @@ public class MainStage {
 
     private ToolBar buildToolBar() {
         ToolBar bar = new ToolBar(
-            toolBtn("📄+ Tab",         this::newTab,                                    "New tab (Ctrl+T)"),
-            toolBtn("📂 Open",         this::openFile,                                  "Open (Ctrl+O)"),
-            toolBtn("💾 Save",         () -> withActive(s -> s.getController().saveFile()), "Save (Ctrl+S)"),
+            toolBtn(I18n.t("toolbar.newTab"), this::newTab, I18n.t("tooltip.newTab")),
+            toolBtn(I18n.t("toolbar.open"), this::openFile, I18n.t("tooltip.open")),
+            toolBtn(I18n.t("toolbar.save"), () -> withActive(s -> s.getController().saveFile()), I18n.t("tooltip.save")),
             new Separator(Orientation.VERTICAL),
-            toolBtn("↩ Undo",          () -> withActive(s -> s.getEditorPane().undo()),  "Undo (Ctrl+Z)"),
-            toolBtn("↪ Redo",          () -> withActive(s -> s.getEditorPane().redo()),  "Redo (Ctrl+Shift+Z)"),
+            toolBtn(I18n.t("toolbar.undo"), () -> withActive(s -> s.getEditorPane().undo()), I18n.t("tooltip.undo")),
+            toolBtn(I18n.t("toolbar.redo"), () -> withActive(s -> s.getEditorPane().redo()), I18n.t("tooltip.redo")),
             new Separator(Orientation.VERTICAL),
-            toolBtn("⬡ Pretty Print",  () -> withActive(s -> s.getController().prettyPrint()), "Pretty Print (Ctrl+P)"),
-            toolBtn("📋 Load XSD",     () -> withActive(s -> s.getController().loadXsd()),      "Load XSD schema"),
-            toolBtn("✔ Validate",      () -> withActive(s -> s.getController().validate()),      "Validate XSD (Ctrl+E)"),
+            toolBtn(I18n.t("toolbar.prettyPrint"), () -> withActive(s -> s.getController().prettyPrint()), I18n.t("tooltip.prettyPrint")),
+            toolBtn(I18n.t("toolbar.loadXsd"), () -> withActive(s -> s.getController().loadXsd()), I18n.t("tooltip.loadXsd")),
+            toolBtn(I18n.t("toolbar.validate"), () -> withActive(s -> s.getController().validate()), I18n.t("tooltip.validate")),
             new Separator(Orientation.VERTICAL),
-            toolBtn("🔍 Find",         () -> withActive(s -> s.getController().toggleSearch()),  "Find (Ctrl+F)"),
-            toolBtn("# Line",          () -> withActive(s -> s.getController().showGoToLine()),   "Go to line (Ctrl+G)")
+            toolBtn(I18n.t("toolbar.find"), () -> withActive(s -> s.getController().toggleSearch()), I18n.t("tooltip.find")),
+            toolBtn(I18n.t("toolbar.line"), () -> withActive(s -> s.getController().showGoToLine()), I18n.t("tooltip.goToLine"))
         );
         bar.getStyleClass().add("main-toolbar");
         return bar;
@@ -419,31 +458,31 @@ public class MainStage {
     private void showXsdFolderInfo() {
         if (!xsdFolderMgr.isConfigured()) {
             Alert a = new Alert(Alert.AlertType.INFORMATION);
-            a.setTitle("XSD Folder");
-            a.setHeaderText("No XSD folder configured");
-            a.setContentText("Use 'Set XSD Folder…' from the XML menu to configure it.");
+            a.setTitle(I18n.t("dialog.xsdFolder.title"));
+            a.setHeaderText(I18n.t("dialog.xsdFolder.noneHeader"));
+            a.setContentText(I18n.t("dialog.xsdFolder.noneContent"));
             a.showAndWait();
             return;
         }
         var schemas = xsdFolderMgr.listAvailableSchemas();
         String list = schemas.isEmpty()
-            ? "(no .xsd files found)"
+            ? I18n.t("dialog.xsdFolder.empty")
             : schemas.stream()
                 .map(p -> "  • " + p.getFileName())
                 .reduce("", (a, b) -> a + "\n" + b);
 
         Alert a = new Alert(Alert.AlertType.INFORMATION);
-        a.setTitle("XSD Folder");
-        a.setHeaderText("Folder: " + xsdFolderMgr.getXsdFolder().orElseThrow());
-        a.setContentText(schemas.size() + " schema(s) available:" + list);
+        a.setTitle(I18n.t("dialog.xsdFolder.title"));
+        a.setHeaderText(I18n.t("dialog.xsdFolder.header", xsdFolderMgr.getXsdFolder().orElseThrow()));
+        a.setContentText(I18n.t("dialog.xsdFolder.content", schemas.size()) + list);
         a.getDialogPane().setPrefWidth(520);
         a.showAndWait();
     }
 
     private void showAbout() {
-        javafx.scene.control.Label lDev     = new javafx.scene.control.Label("Developed by: Luca Tocco");
-        javafx.scene.control.Label lAzienda = new javafx.scene.control.Label("Company: Touch Informatica S.r.l.s.");
-        javafx.scene.control.Label lSito    = new javafx.scene.control.Label("Website: ");
+        javafx.scene.control.Label lDev     = new javafx.scene.control.Label(I18n.t("dialog.about.developer"));
+        javafx.scene.control.Label lAzienda = new javafx.scene.control.Label(I18n.t("dialog.about.company"));
+        javafx.scene.control.Label lSito    = new javafx.scene.control.Label(I18n.t("dialog.about.website"));
         javafx.scene.control.Hyperlink link = new javafx.scene.control.Hyperlink("www.touchinformatica.it");
         link.setOnAction(e -> {
             if (hostServices != null)
@@ -456,7 +495,7 @@ public class MainStage {
         content.setPadding(new javafx.geometry.Insets(10, 0, 0, 0));
 
         Dialog<Void> dlg = new Dialog<>();
-        dlg.setTitle("About");
+        dlg.setTitle(I18n.t("dialog.about.title"));
         dlg.setHeaderText(AppInfo.nameAndVersion());
         dlg.getDialogPane().setContent(content);
         dlg.getDialogPane().setPrefWidth(380);
@@ -467,7 +506,7 @@ public class MainStage {
     private void updateXsdFolderStatus() {
         xsdFolderMgr.getXsdFolder().ifPresent(f -> {
             int n = xsdFolderMgr.listAvailableSchemas().size();
-            statusBar.setStatus("XSD folder: " + f.getFileName() + " (" + n + " XSD)");
+            statusBar.setStatus(I18n.t("status.xsdFolder", f.getFileName(), n));
         });
     }
 
@@ -479,7 +518,7 @@ public class MainStage {
         if (menuRecenti == null) return;
         menuRecenti.getItems().clear();
         if (recents.isEmpty()) {
-            menuRecenti.getItems().add(new MenuItem("(none)"));
+            menuRecenti.getItems().add(new MenuItem(I18n.t("menu.file.recent.none")));
             return;
         }
         for (Path p : recents) {
@@ -488,7 +527,7 @@ public class MainStage {
             menuRecenti.getItems().add(mi);
         }
         menuRecenti.getItems().add(new SeparatorMenuItem());
-        MenuItem clear = new MenuItem("Clear List");
+        MenuItem clear = new MenuItem(I18n.t("menu.file.recent.clear"));
         clear.setOnAction(e -> { recentMgr.clear(); refreshRecentMenu(recentMgr.getRecentFiles()); });
         menuRecenti.getItems().add(clear);
     }

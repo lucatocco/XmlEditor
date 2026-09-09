@@ -1,5 +1,6 @@
 package it.touchinformatica.xmleditor.view;
 
+import it.touchinformatica.xmleditor.util.I18n;
 import javafx.application.Platform;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
@@ -25,11 +26,12 @@ public class TreePane extends VBox {
     private static final int MAX_CHILDREN = 200;
     private static final int MAX_DEPTH    = 12;
 
+    private final Label title;
     private final TreeView<XmlNode> treeView;
     private Consumer<Integer> onNodeSelected;
 
     public TreePane() {
-        Label title = new Label("XML Structure");
+        title = new Label(I18n.t("panel.tree"));
         title.getStyleClass().add("panel-title");
 
         treeView = new TreeView<>();
@@ -79,6 +81,11 @@ public class TreePane extends VBox {
 
     public void clear() {
         Platform.runLater(() -> treeView.setRoot(null));
+    }
+
+    /** Ricarica i testi dopo un cambio di lingua. */
+    public void applyLanguage() {
+        title.setText(I18n.t("panel.tree"));
     }
 
     public void setOnNodeSelected(Consumer<Integer> callback) {

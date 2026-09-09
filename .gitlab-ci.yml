@@ -22,7 +22,7 @@ build-msi-windows:
     - $env:PATH = "C:\Program Files (x86)\WiX Toolset v3.14\bin;" + $env:PATH
 
     # 4. Build Maven con profilo Windows
-    - mvn clean package -q -DskipTests -P windows
+    - mvn clean package -q -P windows
 
     # 5. Genera MSI con jpackage
     - |

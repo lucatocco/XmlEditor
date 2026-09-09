@@ -1,5 +1,6 @@
 package it.touchinformatica.xmleditor.view;
 
+import it.touchinformatica.xmleditor.util.I18n;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -29,7 +30,7 @@ public class SearchBar extends HBox {
         this.editorPane = editorPane;
 
         searchField = new TextField();
-        searchField.setPromptText("Search in XML…");
+        searchField.setPromptText(I18n.t("search.prompt"));
         searchField.setPrefWidth(280);
         HBox.setHgrow(searchField, Priority.ALWAYS);
 
@@ -76,6 +77,14 @@ public class SearchBar extends HBox {
     // VISIBILITÀ
     // ──────────────────────────────────────────────
 
+    /** Ricarica i testi dopo un cambio di lingua. */
+    public void applyLanguage() {
+        searchField.setPromptText(I18n.t("search.prompt"));
+        if (occurrences.isEmpty() && lastQuery != null && !lastQuery.isBlank()) {
+            countLabel.setText(I18n.t("search.noResults"));
+        }
+    }
+
     public void toggleVisible() {
         if (isVisible()) hide();
         else {
@@ -114,7 +123,7 @@ public class SearchBar extends HBox {
         recompute();
 
         countLabel.setText(occurrences.isEmpty()
-            ? "No results"
+            ? I18n.t("search.noResults")
             : "0/" + occurrences.size()
         );
 
@@ -145,7 +154,7 @@ public class SearchBar extends HBox {
         recompute();
         if (occurrences.isEmpty()) {
             currentIndex = -1;
-            countLabel.setText("No results");
+            countLabel.setText(I18n.t("search.noResults"));
         } else if (currentIndex >= occurrences.size()) {
             currentIndex = occurrences.size() - 1;
         }

@@ -36,8 +36,8 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('pom.xml') }}
 
       # 4. Build con profilo Windows
-      - name: Maven build (Windows profile)
-        run: mvn clean package -q -DskipTests -P windows
+      - name: Maven build e test (profilo Windows)
+        run: mvn clean package -q -P windows
 
       # 5. WiX Toolset — già pre-installato su windows-latest, aggiungi solo al PATH
       - name: Add WiX to PATH

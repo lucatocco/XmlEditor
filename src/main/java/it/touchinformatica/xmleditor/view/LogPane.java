@@ -1,5 +1,6 @@
 package it.touchinformatica.xmleditor.view;
 
+import it.touchinformatica.xmleditor.util.I18n;
 import javafx.application.Platform;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
@@ -11,10 +12,11 @@ import javafx.scene.layout.Priority;
  */
 public class LogPane extends VBox {
 
+    private final Label title;
     private final TextArea area;
 
     public LogPane() {
-        Label title = new Label("Log / Validation");
+        title = new Label(I18n.t("panel.log"));
         title.getStyleClass().add("panel-title");
 
         area = new TextArea();
@@ -39,6 +41,11 @@ public class LogPane extends VBox {
             area.appendText(prefix + msg + "\n");
             area.setScrollTop(Double.MAX_VALUE);
         });
+    }
+
+    /** Ricarica i testi dopo un cambio di lingua. */
+    public void applyLanguage() {
+        title.setText(I18n.t("panel.log"));
     }
 
     public void clear() { Platform.runLater(() -> area.clear()); }
