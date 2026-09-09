@@ -207,20 +207,4 @@ public class XmlService {
             return new ValidationResult(false, errors);
         }
     }
-
-    // ──────────────────────────────────────────────
-    // PARSE DOM (per il TreeView)
-    // ──────────────────────────────────────────────
-
-    /**
-     * Parsa il testo XML e restituisce il Document DOM.
-     * Usato dal TreePanel per costruire l'albero.
-     */
-    public Document parse(String xmlText) throws Exception {
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
-        DocumentBuilder builder = factory.newDocumentBuilder();
-        return builder.parse(new InputSource(new StringReader(xmlText)));
-    }
 }

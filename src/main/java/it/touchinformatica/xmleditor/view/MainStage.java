@@ -4,6 +4,7 @@ import it.touchinformatica.xmleditor.service.XmlService;
 import it.touchinformatica.xmleditor.util.AppInfo;
 import it.touchinformatica.xmleditor.util.RecentFilesManager;
 import it.touchinformatica.xmleditor.util.XsdFolderManager;
+import javafx.application.Platform;
 import javafx.geometry.Orientation;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -36,6 +37,7 @@ public class MainStage {
     private final javafx.application.HostServices hostServices;
 
     private Menu menuRecenti;
+    private CheckMenuItem miWrap;   // stato globale, va riallineato al tab attivo
 
     public MainStage(Stage stage) {
         this(stage, List.of(), null);
@@ -55,6 +57,28 @@ public class MainStage {
         this.tabPane       = new TabPane();
 
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.ALL_TABS);
+
+        // Un unico listener per la finestra: registrarne uno per ogni tab creato
+        // ne lasciava in giro anche dopo la chiusura del tab.
+        tabPane.getSelectionModel().selectedItemProperty().addListener((obs, old, sel) -> {
+            if (sel == null) return;
+            updateWindowTitle(sel.getText());
+            if (sel.getUserData() instanceof EditorSession s) {
+                if (miWrap != null) miWrap.setSelected(s.getEditorPane().isWordWrap());
+                s.getController().refreshStatus();
+            }
+        });
+
+        // L'applicazione deve avere sempre almeno un tab: chiudendo l'ultimo con la
+        // "X" la barra restava vuota e Ctrl+Tab divideva per zero.
+        tabPane.getTabs().addListener((javafx.collections.ListChangeListener<Tab>) change -> {
+            while (change.next()) {
+                for (Tab removed : change.getRemoved()) {
+                    if (removed.getUserData() instanceof EditorSession s) s.dispose();
+                }
+            }
+            if (tabPane.getTabs().isEmpty()) Platform.runLater(this::newTab);
+        });
 
         buildScene();
         setupAccelerators();
@@ -81,14 +105,15 @@ public class MainStage {
         tabPane.getTabs().add(session.getTab());
         tabPane.getSelectionModel().select(session.getTab());
 
-        // Aggiorna titolo finestra al cambio tab
+        // Il titolo del tab cambia con l'asterisco delle modifiche: questo listener
+        // vive quanto il tab, quindi non serve rimuoverlo.
         session.getTab().textProperty().addListener((obs, old, text) -> {
             if (tabPane.getSelectionModel().getSelectedItem() == session.getTab())
                 updateWindowTitle(text);
         });
-        tabPane.getSelectionModel().selectedItemProperty().addListener((obs, old, sel) -> {
-            if (sel == session.getTab()) updateWindowTitle(session.getTab().getText());
-        });
+
+        // Il nuovo tab eredita l'impostazione di a capo automatico attualmente scelta
+        if (miWrap != null) session.getEditorPane().setWordWrap(miWrap.isSelected());
 
         updateWindowTitle(session.getTab().getText());
         return session;
@@ -184,8 +209,7 @@ public class MainStage {
             s.saveCurrentPosition();
             if (s.isModified() && !s.getController().confirmDiscardChanges()) return;
         }
-        tabPane.getTabs().remove(selected);
-        if (tabPane.getTabs().isEmpty()) newTab();
+        tabPane.getTabs().remove(selected);   // il listener ricrea un tab se resta vuoto
     }
 
     // ──────────────────────────────────────────────
@@ -279,7 +303,7 @@ public class MainStage {
         // ── Visualizza ──
         MenuItem miTabPrev  = menuItem("Previous Tab",      "Ctrl+Shift+Tab",   this::selectPrevTab);
         MenuItem miTabNext  = menuItem("Next Tab",          "Ctrl+Tab",         this::selectNextTab);
-        CheckMenuItem miWrap = new CheckMenuItem("Word Wrap");
+        miWrap = new CheckMenuItem("Word Wrap");
         miWrap.setOnAction(e -> withActive(s -> s.getEditorPane().setWordWrap(miWrap.isSelected())));
 
         Menu menuEncoding = new Menu("Encoding");
@@ -354,15 +378,17 @@ public class MainStage {
     // ──────────────────────────────────────────────
 
     private void selectNextTab() {
+        int count = tabPane.getTabs().size();
+        if (count == 0) return;
         int idx = tabPane.getSelectionModel().getSelectedIndex();
-        int next = (idx + 1) % tabPane.getTabs().size();
-        tabPane.getSelectionModel().select(next);
+        tabPane.getSelectionModel().select((idx + 1) % count);
     }
 
     private void selectPrevTab() {
+        int count = tabPane.getTabs().size();
+        if (count == 0) return;
         int idx = tabPane.getSelectionModel().getSelectedIndex();
-        int prev = (idx - 1 + tabPane.getTabs().size()) % tabPane.getTabs().size();
-        tabPane.getSelectionModel().select(prev);
+        tabPane.getSelectionModel().select((idx - 1 + count) % count);
     }
 
     // ──────────────────────────────────────────────

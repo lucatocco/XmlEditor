@@ -49,8 +49,10 @@ Each tab is an independent session with its own editor, tree, log and document s
 | Go to line | Ctrl+G |
 
 ### View
-- **Word wrap** — toggle in the View menu
-- **Encoding** — reload the file as UTF-8, ISO-8859-1, UTF-16 or Windows-1252
+- **Word wrap** — toggle in the View menu, remembered per tab
+- **Encoding** — the encoding is detected when a file is opened, from its byte order
+  mark or its XML declaration, so a Latin-1 invoice opens with its accents intact.
+  The View menu can still reload the file as UTF-8, ISO-8859-1, UTF-16 or Windows-1252.
 
 ### XML
 | Action | Shortcut |
@@ -83,6 +85,9 @@ The XSD folder is remembered across restarts.
 - **Color-coded log** (green/orange/red) for every operation
 - **Click an XSD error** → jumps to the offending line in the editor
 - **Last cursor position** is restored per file
+- **The tree follows your edits**, rebuilt shortly after you stop typing
+- **Saving is atomic** — the file is written beside the original and moved into place,
+  so an interrupted save cannot leave a truncated file behind
 
 ---
 

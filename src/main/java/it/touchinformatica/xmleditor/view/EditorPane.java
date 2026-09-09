@@ -26,12 +26,13 @@ public class EditorPane extends StackPane {
     private final StringProperty encoding     = new SimpleStringProperty("UTF-8");
     private final StringProperty lineEnding   = new SimpleStringProperty("LF");
     private boolean suppressModified = false;
+    private final Runnable stopHighlighting;
 
     public EditorPane() {
         this.codeArea = new CodeArea();
         codeArea.setParagraphGraphicFactory(LineNumberFactory.get(codeArea));
         codeArea.getStyleClass().add("xml-code-area");
-        XmlSyntaxHighlighter.bind(codeArea);
+        this.stopHighlighting = XmlSyntaxHighlighter.bind(codeArea);
 
         // Traccia modifiche utente
         codeArea.textProperty().addListener((obs, old, val) -> {
@@ -128,4 +129,9 @@ public class EditorPane extends StackPane {
     }
 
     public CodeArea getCodeArea() { return codeArea; }
+
+    /** Libera il thread del syntax highlighting. Da chiamare alla chiusura del tab. */
+    public void dispose() {
+        if (stopHighlighting != null) stopHighlighting.run();
+    }
 }

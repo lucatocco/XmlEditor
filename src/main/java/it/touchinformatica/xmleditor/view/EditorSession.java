@@ -115,5 +115,8 @@ public class EditorSession {
 
     public void saveCurrentPosition()    { controller.saveCurrentPosition(); }
 
+    /** Rilascia le risorse del tab (thread del syntax highlighting). */
+    public void dispose() { editorPane.dispose(); }
+
     public void openPath(Path path) { controller.openPath(path); }
 }

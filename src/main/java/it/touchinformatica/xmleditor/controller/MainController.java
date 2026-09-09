@@ -6,13 +6,17 @@ import it.touchinformatica.xmleditor.util.LastPositionManager;
 import it.touchinformatica.xmleditor.util.RecentFilesManager;
 import it.touchinformatica.xmleditor.util.XsdFolderManager;
 import it.touchinformatica.xmleditor.view.*;
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.scene.control.*;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.stage.Window;
+import javafx.util.Duration;
 
 import java.io.*;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -36,6 +40,11 @@ public class MainController {
     private final Consumer<List<Path>> refreshRecentMenu;
     private final Consumer<String>     updateTabTitle;
     private final XsdFolderManager     xsdFolderMgr;
+
+    /** Oltre questa dimensione l'albero si aggiorna solo su apertura e pretty print. */
+    private static final int MAX_LIVE_TREE_CHARS = 5_000_000;
+
+    private final PauseTransition treeDebounce = new PauseTransition(Duration.millis(700));
 
     private XmlDocument currentDoc;
     private Path        currentXsdPath;
@@ -64,15 +73,32 @@ public class MainController {
         treePane.setOnNodeSelected(editorPane::goToLine);
 
         // Statusbar: riga:colonna in tempo reale
-        editorPane.getCodeArea().caretPositionProperty().addListener((obs, old, pos) -> {
-            int para = editorPane.getCodeArea().getCurrentParagraph();
-            int col  = editorPane.getCodeArea().getCaretColumn();
-            int tot  = editorPane.getLineCount();
-            statusBar.setStatus("Line " + (para + 1) + ":" + (col + 1)
-                + "  |  Lines: " + tot
-                + "  |  " + editorPane.getEncoding()
-                + "  |  " + editorPane.getLineEnding());
+        editorPane.getCodeArea().caretPositionProperty().addListener((obs, old, pos) -> refreshStatus());
+
+        // L'albero seguiva solo apertura e pretty print, così dopo qualche modifica
+        // i nodi puntavano a righe sbagliate. Ora si ricostruisce a pausa di battitura:
+        // PauseTransition vive sul thread FX, quindi non aggiunge thread da chiudere.
+        treeDebounce.setOnFinished(e -> {
+            String text = editorPane.getText();
+            if (text.length() <= MAX_LIVE_TREE_CHARS) rebuildTree(text);
         });
+        editorPane.getCodeArea().textProperty().addListener((obs, old, val) -> treeDebounce.playFromStart());
+    }
+
+    /** Aggiorna la statusbar con la posizione del caret; da richiamare anche al cambio tab. */
+    public void refreshStatus() {
+        int para = editorPane.getCodeArea().getCurrentParagraph();
+        int col  = editorPane.getCodeArea().getCaretColumn();
+        int tot  = editorPane.getLineCount();
+        statusBar.setStatus("Line " + (para + 1) + ":" + (col + 1)
+            + "  |  Lines: " + tot
+            + "  |  " + editorPane.getEncoding()
+            + "  |  " + editorPane.getLineEnding());
+    }
+
+    /** Finestra a cui agganciare i dialoghi, così non finiscono dietro l'applicazione. */
+    private Window owner() {
+        return editorPane.getScene() != null ? editorPane.getScene().getWindow() : null;
     }
 
     // ──────────────────────────────────────────────
@@ -103,23 +129,17 @@ public class MainController {
     // APRI
     // ──────────────────────────────────────────────
 
-    public void openFile() {
-        if (!confirmDiscardChanges()) return;
-        FileChooser fc = new FileChooser();
-        fc.setTitle("Open XML File");
-        fc.getExtensionFilters().addAll(
-            new FileChooser.ExtensionFilter("File XML/XSD/TXT", "*.xml", "*.xsd", "*.txt"),
-            new FileChooser.ExtensionFilter("All Files", "*.*")
-        );
-        // Nota: openFile singolo nel controller, multi-file gestito da MainStage
-        File file = fc.showOpenDialog(null);
-        if (file != null) openPath(file.toPath());
-    }
-
+    /** Apre il file rilevandone l'encoding dal BOM o dalla dichiarazione XML. */
     public void openPath(Path path) {
-        openPath(path, editorPane.getCharset());
+        openPath(path, null);
     }
 
+    /**
+     * @param charset encoding da usare, oppure null per rilevarlo dal file.
+     *                Un file non leggibile con l'encoding richiesto viene riletto
+     *                in ISO-8859-1, che accetta qualunque byte, con un avviso:
+     *                meglio aprirlo con gli accenti sbagliati che non aprirlo.
+     */
     public void openPath(Path path, Charset charset) {
         if (currentDoc != null && currentDoc.getFilePath() != null) {
             lastPosMgr.savePosition(currentDoc.getFilePath(),
@@ -128,19 +148,34 @@ public class MainController {
         statusBar.setStatus("Loading " + path.getFileName() + "…");
         Thread.ofVirtual().start(() -> {
             try {
-                long sizeMb = Files.size(path) / 1024 / 1024;
-                String raw = Files.readString(path, charset);
+                String size = humanSize(Files.size(path));
+                Charset requested = charset != null ? charset : detectCharset(path);
+
+                String raw;
+                String warning = null;
+                try {
+                    raw = Files.readString(path, requested);
+                } catch (CharacterCodingException e) {
+                    warning = "Not valid " + requested.name() + ": reopened as ISO-8859-1";
+                    requested = StandardCharsets.ISO_8859_1;
+                    raw = Files.readString(path, requested);
+                }
+
+                final Charset used = requested;
+                final String note = warning;
                 String le = detectLineEnding(raw);
                 String content = normalizeLineEndings(raw);
                 Platform.runLater(() -> {
                     currentDoc = new XmlDocument(path, content);
                     editorPane.setText(content);
-                    editorPane.setEncoding(charset.name());
+                    editorPane.setEncoding(used.name());
                     editorPane.setLineEnding(le);
                     updateTabTitle.accept(path.getFileName().toString());
                     statusBar.setStatus("Opened: " + path.getFileName()
-                        + " (" + sizeMb + " MB)  |  " + charset.name() + "  |  " + le);
-                    logPane.log("Loaded: " + path + " (" + sizeMb + " MB)  [" + le + "]", "ok");
+                        + " (" + size + ")  |  " + used.name() + "  |  " + le);
+                    logPane.log("Loaded: " + path + " (" + size + ")  ["
+                        + used.name() + ", " + le + "]", "ok");
+                    if (note != null) logPane.log(note, "warn");
                     recentMgr.add(path);
                     refreshRecentMenu.accept(recentMgr.getRecentFiles());
                     rebuildTree(content);
@@ -165,43 +200,101 @@ public class MainController {
     // ──────────────────────────────────────────────
 
     /** @return false se l'utente ha annullato la scelta del file */
-    public boolean saveFile() {
-        if (currentDoc == null || currentDoc.getFilePath() == null) return saveFileAs();
-        writeToDisk(currentDoc.getFilePath());
-        return true;
-    }
+    public boolean saveFile() { return saveFile(false); }
 
     /** @return false se l'utente ha annullato la scelta del file */
-    public boolean saveFileAs() {
+    public boolean saveFileAs() { return saveFileAs(false); }
+
+    /**
+     * Salva attendendo la fine della scrittura.
+     * Da usare quando subito dopo l'applicazione chiude o ricarica il file:
+     * la variante asincrona verrebbe interrotta dalla fine della JVM.
+     *
+     * @return true se il file è stato scritto davvero
+     */
+    public boolean saveFileBlocking() { return saveFile(true); }
+
+    private boolean saveFile(boolean blocking) {
+        if (currentDoc == null || currentDoc.getFilePath() == null) return saveFileAs(blocking);
+        return writeToDisk(currentDoc.getFilePath(), blocking);
+    }
+
+    private boolean saveFileAs(boolean blocking) {
         FileChooser fc = new FileChooser();
         fc.setTitle("Save XML File");
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("XML Files", "*.xml"));
-        File file = fc.showSaveDialog(null);
+        File file = fc.showSaveDialog(owner());
         if (file == null) return false;
-        writeToDisk(file.toPath());
-        return true;
+        return writeToDisk(file.toPath(), blocking);
     }
 
-    private void writeToDisk(Path path) {
+    /**
+     * @param blocking se true scrive sul thread chiamante e riporta l'esito reale;
+     *                 se false scrive in background e riporta solo che è partita
+     */
+    private boolean writeToDisk(Path path, boolean blocking) {
         String content  = restoreLineEndings(editorPane.getText(), editorPane.getLineEnding());
         Charset charset = editorPane.getCharset();
+
+        if (blocking) {
+            try {
+                writeAtomically(path, content, charset);
+                onSaved(path, content);
+                return true;
+            } catch (IOException e) {
+                logPane.log("Error saving file: " + e.getMessage(), "error");
+                return false;
+            }
+        }
+
         Thread.ofVirtual().start(() -> {
             try {
-                Files.writeString(path, content, charset);
-                Platform.runLater(() -> {
-                    if (currentDoc == null) currentDoc = new XmlDocument(path, content);
-                    else { currentDoc.setFilePath(path); currentDoc.markSaved(); }
-                    editorPane.markSaved();
-                    updateTabTitle.accept(path.getFileName().toString());
-                    statusBar.setStatus("Saved: " + path);
-                    logPane.log("Saved: " + path, "ok");
-                    recentMgr.add(path);
-                    refreshRecentMenu.accept(recentMgr.getRecentFiles());
-                });
+                writeAtomically(path, content, charset);
+                Platform.runLater(() -> onSaved(path, content));
             } catch (IOException e) {
                 Platform.runLater(() -> logPane.log("Error saving file: " + e.getMessage(), "error"));
             }
         });
+        return true;
+    }
+
+    /** Aggiornamenti di stato e interfaccia dopo un salvataggio riuscito. */
+    private void onSaved(Path path, String content) {
+        if (currentDoc == null) currentDoc = new XmlDocument(path, content);
+        else { currentDoc.setFilePath(path); currentDoc.markSaved(); }
+        editorPane.markSaved();
+        updateTabTitle.accept(path.getFileName().toString());
+        statusBar.setStatus("Saved: " + path);
+        logPane.log("Saved: " + path, "ok");
+        recentMgr.add(path);
+        refreshRecentMenu.accept(recentMgr.getRecentFiles());
+    }
+
+    /**
+     * Scrive su un file temporaneo nella stessa cartella e poi lo sposta sul posto.
+     * Scrivere direttamente sul file di destinazione lo troncherebbe subito: se la
+     * scrittura si interrompe a metà, l'originale è perso.
+     */
+    private static void writeAtomically(Path path, String content, Charset charset) throws IOException {
+        Path dir = path.toAbsolutePath().getParent();
+        Path tmp;
+        try {
+            tmp = Files.createTempFile(dir, ".xmleditor-", ".tmp");
+        } catch (IOException e) {
+            // Cartella non scrivibile: meglio il salvataggio diretto che nessun salvataggio
+            Files.writeString(path, content, charset);
+            return;
+        }
+        try {
+            Files.writeString(tmp, content, charset);
+            try {
+                Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(tmp);
+        }
     }
 
     // ──────────────────────────────────────────────
@@ -244,7 +337,7 @@ public class MainController {
         DirectoryChooser dc = new DirectoryChooser();
         dc.setTitle("Select XSD Folder");
         xsdFolderMgr.getXsdFolder().ifPresent(f -> dc.setInitialDirectory(f.toFile()));
-        File dir = dc.showDialog(null);
+        File dir = dc.showDialog(owner());
         if (dir == null) return;
         xsdFolderMgr.setXsdFolder(dir.toPath());
         int count = xsdFolderMgr.listAvailableSchemas().size();
@@ -262,7 +355,7 @@ public class MainController {
         fc.setTitle("Load XSD Schema");
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("XSD Schema", "*.xsd"));
         xsdFolderMgr.getXsdFolder().ifPresent(f -> fc.setInitialDirectory(f.toFile()));
-        File file = fc.showOpenDialog(null);
+        File file = fc.showOpenDialog(owner());
         if (file == null) return;
         currentXsdPath = file.toPath();
         logPane.log("XSD schema loaded manually: " + file.getName(), "ok");
@@ -440,6 +533,8 @@ public class MainController {
             statusBar.setStatus("Encoding: " + enc);
             return;
         }
+        // confirmDiscardChanges() ora attende la fine della scrittura, quindi la
+        // rilettura non può più incrociare un salvataggio ancora in corso
         if (!confirmDiscardChanges()) return;
         try { openPath(currentDoc.getFilePath(), Charset.forName(enc)); }
         catch (Exception e) { logPane.log("Invalid encoding: " + enc, "error"); }
@@ -469,7 +564,7 @@ public class MainController {
         if (result.isEmpty() || result.get() == btnAnnulla) return false;
         // Se il "Save As…" viene annullato non si procede: le modifiche
         // andrebbero perse senza che l'utente lo abbia mai confermato
-        if (result.get() == btnSalva) return saveFile();
+        if (result.get() == btnSalva) return saveFileBlocking();
         return true;
     }
 
@@ -485,6 +580,52 @@ public class MainController {
     // ──────────────────────────────────────────────
     // LINE ENDINGS
     // ──────────────────────────────────────────────
+
+    /**
+     * Ricava l'encoding del file da BOM e dichiarazione XML.
+     *
+     * <p>Un documento XML dichiara da sé come è codificato: leggerlo sempre in UTF-8
+     * faceva fallire l'apertura dei file ISO-8859-1 con un {@code MalformedInputException}
+     * dal messaggio incomprensibile.</p>
+     *
+     * @return l'encoding dichiarato, UTF-8 se il file non dice nulla
+     */
+    private static Charset detectCharset(Path path) throws IOException {
+        byte[] head = new byte[1024];
+        int read;
+        try (InputStream in = Files.newInputStream(path)) {
+            read = in.readNBytes(head, 0, head.length);
+        }
+        if (read <= 0) return StandardCharsets.UTF_8;
+
+        // 1. BOM: ha la precedenza sulla dichiarazione
+        if (read >= 3 && (head[0] & 0xFF) == 0xEF && (head[1] & 0xFF) == 0xBB && (head[2] & 0xFF) == 0xBF)
+            return StandardCharsets.UTF_8;
+        if (read >= 2 && (head[0] & 0xFF) == 0xFF && (head[1] & 0xFF) == 0xFE)
+            return StandardCharsets.UTF_16LE;
+        if (read >= 2 && (head[0] & 0xFF) == 0xFE && (head[1] & 0xFF) == 0xFF)
+            return StandardCharsets.UTF_16BE;
+
+        // 2. <?xml … encoding="…"?> — il prologo è ASCII in tutti gli encoding gestiti qui
+        String declaration = new String(head, 0, read, StandardCharsets.ISO_8859_1);
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("<\\?xml[^>]*encoding\\s*=\\s*[\"']([^\"']+)[\"']")
+            .matcher(declaration);
+        if (m.find()) {
+            try {
+                return Charset.forName(m.group(1).trim());
+            } catch (Exception ignored) {
+                // encoding dichiarato ma sconosciuto: si prosegue con UTF-8
+            }
+        }
+        return StandardCharsets.UTF_8;
+    }
+
+    private static String humanSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
+        return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
+    }
 
     private static String detectLineEnding(String text) {
         if (text.contains("\r\n")) return "CRLF";

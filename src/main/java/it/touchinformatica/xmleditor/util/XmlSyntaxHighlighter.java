@@ -73,8 +73,11 @@ public class XmlSyntaxHighlighter {
     /**
      * Collega il syntax highlighting in tempo reale a una CodeArea.
      * Usa un ScheduledExecutorService per debounce senza dipendenze da org.reactfx.
+     *
+     * @return da invocare alla chiusura del tab per fermare il thread di supporto,
+     *         che altrimenti resterebbe vivo per tutta la sessione
      */
-    public static void bind(CodeArea codeArea) {
+    public static Runnable bind(CodeArea codeArea) {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "xml-highlighter");
             t.setDaemon(true);
@@ -95,5 +98,7 @@ public class XmlSyntaxHighlighter {
                 });
             }, 150, TimeUnit.MILLISECONDS));
         });
+
+        return executor::shutdownNow;
     }
 }

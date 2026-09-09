@@ -25,8 +25,11 @@ public class RecentFilesManager {
     }
 
     public void add(Path path) {
-        recentFiles.remove(path);          // rimuovi se già presente (evita duplicati)
-        recentFiles.add(0, path);          // aggiungi in cima
+        // Sempre in forma assoluta: lo stesso file aperto con un path relativo
+        // (da riga di comando) altrimenti entrava in lista una seconda volta
+        Path absolute = path.toAbsolutePath().normalize();
+        recentFiles.remove(absolute);      // rimuovi se già presente (evita duplicati)
+        recentFiles.add(0, absolute);      // aggiungi in cima
         if (recentFiles.size() > MAX_RECENT) {
             recentFiles.remove(recentFiles.size() - 1);
         }
@@ -34,8 +37,9 @@ public class RecentFilesManager {
     }
 
     public List<Path> getRecentFiles() {
-        // Filtra file che non esistono più
-        recentFiles.removeIf(p -> !Files.exists(p));
+        // Filtra i file che non esistono più, e rende persistente la rimozione:
+        // senza il save() ricomparivano al riavvio successivo
+        if (recentFiles.removeIf(p -> !Files.exists(p))) save();
         return List.copyOf(recentFiles);
     }
 
@@ -49,6 +53,10 @@ public class RecentFilesManager {
         for (int i = 0; i < recentFiles.size(); i++) {
             prefs.put(PREF_KEY_PREFIX + i, recentFiles.get(i).toAbsolutePath().toString());
         }
+        // Ripulisce le voci lasciate da una lista più lunga
+        for (int i = recentFiles.size(); i < MAX_RECENT; i++) {
+            prefs.remove(PREF_KEY_PREFIX + i);
+        }
     }
 
     private void load() {
@@ -56,7 +64,7 @@ public class RecentFilesManager {
         for (int i = 0; i < count; i++) {
             String val = prefs.get(PREF_KEY_PREFIX + i, null);
             if (val != null) {
-                Path p = Path.of(val);
+                Path p = Path.of(val).toAbsolutePath().normalize();
                 if (Files.exists(p)) recentFiles.add(p);
             }
         }
