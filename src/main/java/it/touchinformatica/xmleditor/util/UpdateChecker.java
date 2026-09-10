@@ -93,8 +93,12 @@ public final class UpdateChecker {
             if (response.statusCode() != 200) return Optional.empty();
             return parseRelease(response.body());
 
-        } catch (Exception e) {
-            // Nessuna rete, timeout, limite di richieste raggiunto: si tace
+        } catch (Throwable t) {
+            // Throwable e non Exception di proposito: se il runtime del pacchetto
+            // fosse costruito senza java.net.http, HttpClient mancherebbe e un
+            // NoClassDefFoundError — che è un Error — passerebbe di qui senza
+            // essere visto, lasciando l'interfaccia in attesa per sempre.
+            // Nessuna rete, timeout, limite di richieste: l'esito è comunque "non so".
             return Optional.empty();
         }
     }

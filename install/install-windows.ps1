@@ -98,7 +98,7 @@ for %%f in ("%INSTALL_DIR%classpath-libs\*.jar") do (
 )
 start "" javaw -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 ^
     --module-path "%INSTALL_DIR%javafx-libs" ^
-    --add-modules javafx.controls ^
+    --add-modules javafx.controls,java.net.http ^
     --add-opens=javafx.graphics/com.sun.glass.ui=ALL-UNNAMED ^
     --add-opens=javafx.base/com.sun.javafx.runtime=ALL-UNNAMED ^
     -cp "%INSTALL_DIR%$JAR_NAME!CP_EXTRA!" ^

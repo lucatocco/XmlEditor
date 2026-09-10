@@ -81,7 +81,7 @@ jobs:
             --main-jar     $jarName `
             --main-class   it.touchinformatica.xmleditor.MainApp `
             --module-path  "target\javafx-libs" `
-            --add-modules  "javafx.controls" `
+            --add-modules  "javafx.controls,java.net.http" `
             --java-options "-Dfile.encoding=UTF-8" `
             --java-options "-Dsun.stdout.encoding=UTF-8" `
             --java-options "--add-opens=javafx.graphics/com.sun.glass.ui=ALL-UNNAMED" `
@@ -163,7 +163,7 @@ jobs:
             --main-jar     "XmlEditor-${VERSION}.jar" \
             --main-class   it.touchinformatica.xmleditor.MainApp \
             --module-path  target/javafx-libs \
-            --add-modules  javafx.controls \
+            --add-modules  javafx.controls,java.net.http \
             --java-options "-Dfile.encoding=UTF-8" \
             --icon         install/xmleditor.png \
             --linux-shortcut \
@@ -200,6 +200,21 @@ jobs:
           grep -q 'xdg-desktop-menu install' target/deb-control/postinst \
             || { echo "::error::Il postinst non registra la voce di menu"; exit 1; }
           echo "✔ voce di menu, icona e associazioni presenti e valide"
+
+      # jlink include solo i moduli richiesti da --add-modules e le loro dipendenze.
+      # Un modulo dimenticato non dà errori di build: la funzione che lo usa muore
+      # a runtime con un NoClassDefFoundError, sul computer dell'utente.
+      - name: Verifica i moduli del runtime incluso
+        run: |
+          set -euo pipefail
+          RELEASE=target/deb-check/opt/xmleditor/lib/runtime/release
+          [ -f "$RELEASE" ] || { echo "::error::Runtime non trovato nel pacchetto"; exit 1; }
+          echo "--- moduli inclusi ---"; grep -o 'MODULES="[^"]*"' "$RELEASE" | tr ' ' '\n'
+          for MODULE in java.net.http javafx.controls java.xml java.prefs; do
+            grep -q "$MODULE" "$RELEASE" \
+              || { echo "::error::Il runtime non include $MODULE"; exit 1; }
+          done
+          echo "✔ il runtime contiene tutti i moduli usati dall'applicazione"
 
       - name: Upload DEB
         uses: actions/upload-artifact@v4

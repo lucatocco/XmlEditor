@@ -67,7 +67,7 @@ jpackage \
     --main-jar     "XmlEditor-${VERSION}.jar" \
     --main-class   it.touchinformatica.xmleditor.MainApp \
     --module-path  target/javafx-libs \
-    --add-modules  javafx.controls \
+    --add-modules  javafx.controls,java.net.http \
     --java-options "-Dfile.encoding=UTF-8" \
     --icon         install/xmleditor.png \
     --linux-shortcut \

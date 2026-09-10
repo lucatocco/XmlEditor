@@ -370,6 +370,7 @@ public class MainStage {
         statusBar.setStatus(I18n.t("update.checking"));
         Thread.ofVirtual().start(() -> {
             var latest = UpdateChecker.fetchLatest();
+            // Qualunque cosa accada, la barra di stato non resta su "Controllo…"
             Platform.runLater(() -> {
                 statusBar.setStatus(I18n.t("status.ready"));
                 if (latest.isEmpty()) {
