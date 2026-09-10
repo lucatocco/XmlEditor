@@ -126,7 +126,7 @@ exec java \
     -Dfile.encoding=UTF-8 \
     -Dsun.stdout.encoding=UTF-8 \
     --module-path "/opt/xmleditor/javafx-libs" \
-    --add-modules javafx.controls,java.net.http \
+    --add-modules javafx.controls,java.net.http,jdk.crypto.ec \
     --add-opens=javafx.graphics/com.sun.glass.ui=ALL-UNNAMED \
     --add-opens=javafx.base/com.sun.javafx.runtime=ALL-UNNAMED \
     -cp "/opt/xmleditor/xmleditor.jar${CP_EXTRA}" \

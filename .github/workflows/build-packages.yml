@@ -1,5 +1,11 @@
 name: Build packages
 
+# Moduli del runtime, definiti una volta sola: jpackage li usa per costruire il
+# pacchetto e la verifica li usa per provare la connessione. Se divergessero, il
+# controllo passerebbe su un runtime diverso da quello distribuito.
+env:
+  JAVA_MODULES: "javafx.controls,java.net.http,jdk.crypto.ec"
+
 on:
   # Avvio manuale dalla pagina Actions di GitHub
   workflow_dispatch:
@@ -81,7 +87,7 @@ jobs:
             --main-jar     $jarName `
             --main-class   it.touchinformatica.xmleditor.MainApp `
             --module-path  "target\javafx-libs" `
-            --add-modules  "javafx.controls,java.net.http" `
+            --add-modules  "${env:JAVA_MODULES}" `
             --java-options "-Dfile.encoding=UTF-8" `
             --java-options "-Dsun.stdout.encoding=UTF-8" `
             --java-options "--add-opens=javafx.graphics/com.sun.glass.ui=ALL-UNNAMED" `
@@ -163,7 +169,7 @@ jobs:
             --main-jar     "XmlEditor-${VERSION}.jar" \
             --main-class   it.touchinformatica.xmleditor.MainApp \
             --module-path  target/javafx-libs \
-            --add-modules  javafx.controls,java.net.http \
+            --add-modules  "$JAVA_MODULES" \
             --java-options "-Dfile.encoding=UTF-8" \
             --icon         install/xmleditor.png \
             --linux-shortcut \
@@ -210,11 +216,54 @@ jobs:
           RELEASE=target/deb-check/opt/xmleditor/lib/runtime/release
           [ -f "$RELEASE" ] || { echo "::error::Runtime non trovato nel pacchetto"; exit 1; }
           echo "--- moduli inclusi ---"; grep -o 'MODULES="[^"]*"' "$RELEASE" | tr ' ' '\n'
-          for MODULE in java.net.http javafx.controls java.xml java.prefs; do
+          for MODULE in java.net.http jdk.crypto.ec javafx.controls java.xml java.prefs; do
             grep -q "$MODULE" "$RELEASE" \
               || { echo "::error::Il runtime non include $MODULE"; exit 1; }
           done
           echo "✔ il runtime contiene tutti i moduli usati dall'applicazione"
+
+      # Elencare i moduli a mano è fragile: java.net.http c'era ma mancava
+      # jdk.crypto.ec, e senza SunEC il JDK 21 non completa l'handshake TLS con
+      # GitHub. Invece di indovinare la lista, qui si costruisce un runtime con
+      # gli stessi moduli del pacchetto e ci si fa una vera chiamata HTTPS.
+      - name: Verifica che il runtime possa raggiungere GitHub in HTTPS
+        run: |
+          set -euo pipefail
+          rm -rf target/test-runtime
+          jlink --add-modules "$JAVA_MODULES" \
+                --module-path target/javafx-libs \
+                --no-header-files --no-man-pages \
+                --output target/test-runtime
+
+          mkdir -p target/httpscheck
+          cat > target/httpscheck/HttpsCheck.java <<'JAVA'
+          import java.net.URI;
+          import java.net.http.*;
+          import java.time.Duration;
+
+          /** Verifica che il runtime sappia negoziare TLS, non che l'API risponda. */
+          public class HttpsCheck {
+              public static void main(String[] args) throws Exception {
+                  try (HttpClient client = HttpClient.newBuilder()
+                          .connectTimeout(Duration.ofSeconds(10)).build()) {
+                      HttpRequest request = HttpRequest
+                          .newBuilder(URI.create("https://api.github.com/repos/" + args[0] + "/releases/latest"))
+                          .header("User-Agent", "XmlEditor-ci")
+                          .timeout(Duration.ofSeconds(10))
+                          .GET().build();
+                      // Qualsiasi codice HTTP va bene: significa che l'handshake è riuscito.
+                      // Un limite di richieste raggiunto non è un difetto del pacchetto.
+                      int status = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+                      System.out.println("handshake TLS riuscito, HTTP " + status);
+                  }
+              }
+          }
+          JAVA
+          javac -d target/httpscheck target/httpscheck/HttpsCheck.java
+
+          target/test-runtime/bin/java -cp target/httpscheck HttpsCheck "$GITHUB_REPOSITORY" \
+            || { echo "::error::Il runtime del pacchetto non riesce a connettersi in HTTPS: manca un modulo crittografico"; exit 1; }
+          echo "✔ il runtime distribuito sa parlare HTTPS"
 
       - name: Upload DEB
         uses: actions/upload-artifact@v4

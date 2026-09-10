@@ -127,7 +127,7 @@ $jpackageArgs = @(
     "--main-jar",    $JAR_NAME,
     "--main-class",  "it.touchinformatica.xmleditor.MainApp",
     "--module-path", "$TARGET_DIR\javafx-libs",
-    "--add-modules", "javafx.controls,java.net.http",
+    "--add-modules", "javafx.controls,java.net.http,jdk.crypto.ec",
     "--java-options", "-Dfile.encoding=UTF-8",
     "--java-options", "-Dsun.stdout.encoding=UTF-8",
     "--java-options", "--add-opens=javafx.graphics/com.sun.glass.ui=ALL-UNNAMED",
