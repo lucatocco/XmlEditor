@@ -31,6 +31,7 @@ Each tab is an independent session with its own editor, tree, log and document s
 |--------|----------|
 | New document | Ctrl+N |
 | Open XML/XSD/TXT (multiple files at once) | Ctrl+O |
+| Open by dropping files onto the window | drag and drop |
 | Save | Ctrl+S |
 | Save As | Ctrl+Shift+S |
 | Recent files | File → Recent Files (persisted across sessions) |

@@ -8,11 +8,14 @@ import it.touchinformatica.xmleditor.util.RecentFilesManager;
 import it.touchinformatica.xmleditor.util.XsdFolderManager;
 import javafx.application.Platform;
 import javafx.geometry.Orientation;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.Dragboard;
 import javafx.scene.input.KeyCombination;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
 import javafx.event.Event;
@@ -145,15 +148,26 @@ public class MainStage {
         );
         List<File> files = fc.showOpenMultipleDialog(stage);
         if (files == null || files.isEmpty()) return;
+        openFiles(files);
+    }
 
-        for (int i = 0; i < files.size(); i++) {
-            Path path = files.get(i).toPath();
+    /**
+     * Apre più file: il primo secondo la logica del tab corrente, gli altri
+     * ciascuno in un tab nuovo. Condivisa fra il selettore e il trascinamento.
+     */
+    private void openFiles(List<File> files) {
+        List<Path> paths = files.stream()
+            .filter(File::isFile)          // le cartelle trascinate si ignorano
+            .map(File::toPath)
+            .toList();
+        if (paths.isEmpty()) return;
+
+        for (int i = 0; i < paths.size(); i++) {
             if (i == 0) {
-                openPathIntelligent(path);
+                openPathIntelligent(paths.get(i));
             } else {
-                // File aggiuntivi sempre in nuovo tab
                 EditorSession s = newTab();
-                s.openPath(path);
+                s.openPath(paths.get(i));
             }
         }
     }
@@ -242,6 +256,8 @@ public class MainStage {
             getClass().getResource("/it/touchinformatica/xmleditor/css/editor.css").toExternalForm()
         );
 
+        setupDragAndDrop(scene, root);
+
         stage.setScene(scene);
         stage.setTitle("XmlEditor — Touch Informatica");
 
@@ -259,6 +275,38 @@ public class MainStage {
                     }
                 }
             }
+        });
+    }
+
+    /**
+     * Apertura dei file trascinati sulla finestra.
+     *
+     * <p>Registrato sulla scena e non sull'editor: così funziona anche sull'albero,
+     * sul log e sulla barra dei tab, cioè ovunque uno se lo aspetti. Il trascinamento
+     * di testo dentro l'editor continua a funzionare, perché riguarda un altro tipo
+     * di contenuto del dragboard.</p>
+     */
+    private void setupDragAndDrop(Scene scene, Node highlightTarget) {
+        scene.setOnDragOver(event -> {
+            if (event.getDragboard().hasFiles()) {
+                event.acceptTransferModes(TransferMode.COPY);
+                highlightTarget.getStyleClass().add("drag-over");
+            }
+            event.consume();
+        });
+
+        scene.setOnDragExited(event -> {
+            highlightTarget.getStyleClass().remove("drag-over");
+            event.consume();
+        });
+
+        scene.setOnDragDropped(event -> {
+            highlightTarget.getStyleClass().remove("drag-over");
+            Dragboard board = event.getDragboard();
+            boolean hasFiles = board.hasFiles();
+            if (hasFiles) openFiles(board.getFiles());
+            event.setDropCompleted(hasFiles);
+            event.consume();
         });
     }
 

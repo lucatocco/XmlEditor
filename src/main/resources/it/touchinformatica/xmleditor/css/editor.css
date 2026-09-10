@@ -68,3 +68,10 @@
 .toolbar-btn:disabled .toolbar-icon {
     -fx-opacity: 0.4;
 }
+
+/* Riscontro visivo mentre si trascinano file sulla finestra */
+.drag-over {
+    -fx-border-color: -fx-focus-color;
+    -fx-border-width: 2;
+    -fx-border-style: dashed;
+}
