@@ -265,9 +265,37 @@ jobs:
             || { echo "::error::Il runtime del pacchetto non riesce a connettersi in HTTPS: manca un modulo crittografico"; exit 1; }
           echo "✔ il runtime distribuito sa parlare HTTPS"
 
-      - name: Upload DEB
+      # Archivio autonomo per chi su Linux non ha privilegi di amministratore:
+      # si scompatta in ~/.local e contiene il proprio runtime Java.
+      - name: Archivio per installazione senza root
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's|^[[:space:]]*<version>\(.*\)</version>.*|\1|p' pom.xml | head -1)
+          OUT=target/installer
+          jpackage \
+            --type         app-image \
+            --name         XmlEditor \
+            --app-version  "$VERSION" \
+            --input        target/jpackage-input \
+            --main-jar     "XmlEditor-${VERSION}.jar" \
+            --main-class   it.touchinformatica.xmleditor.MainApp \
+            --module-path  target/javafx-libs \
+            --add-modules  "$JAVA_MODULES" \
+            --java-options "-Dfile.encoding=UTF-8" \
+            --icon         install/xmleditor.png \
+            --dest         target/app-image
+
+          [ -x "target/app-image/XmlEditor/bin/XmlEditor" ] \
+            || { echo "::error::Lanciatore mancante nell'immagine applicativa"; exit 1; }
+
+          tar -czf "$OUT/xmleditor-${VERSION}-linux-x64.tar.gz" -C target/app-image XmlEditor
+          echo "Archivio: $(du -h "$OUT/xmleditor-${VERSION}-linux-x64.tar.gz" | cut -f1)"
+
+      - name: Upload DEB e archivio
         uses: actions/upload-artifact@v4
         with:
           name: XML-Editor-DEB
-          path: target/installer/*.deb
+          path: |
+            target/installer/*.deb
+            target/installer/*.tar.gz
           retention-days: 30

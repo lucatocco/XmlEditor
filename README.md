@@ -129,6 +129,8 @@ XmlEditor/
 ├── pom.xml                       ← single source of truth for the version
 ├── install/
 │   ├── build-deb.sh              ← local DEB build with jpackage
+│   ├── install-user.sh           ← install under ~/.local, no root needed
+│   ├── uninstall-user.sh
 │   ├── build-msi.ps1             ← local MSI build with jpackage
 │   ├── install.sh                ← build from source and install (Linux)
 │   ├── uninstall.sh
@@ -218,6 +220,21 @@ sudo apt remove xmleditor            # to remove it
 The application then appears among the installed applications, under Accessories,
 and opens `.xml` and `.xsd` files on double click. The package is built on Ubuntu
 22.04, so it installs on Ubuntu 22.04 and later, Debian 12 and Linux Mint 21/22.
+
+**Linux without root** — on a machine where you have no administrator rights,
+install under your home directory instead:
+
+```bash
+./install/install-user.sh                     # downloads the latest release
+./install/install-user.sh package.tar.gz      # or uses an archive you already have
+./install/install-user.sh --build             # or builds from source (JDK 21 + Maven)
+./install/uninstall-user.sh                   # to remove it
+```
+
+Everything goes under `~/.local` following the XDG conventions: the application in
+`~/.local/share/xmleditor`, a `xmleditor` command in `~/.local/bin`, and a menu entry
+in `~/.local/share/applications`. The archive carries its own Java runtime, so nothing
+has to be installed system-wide.
 
 **Windows** — download the `.msi` and run it. Windows shows a SmartScreen warning
 because the installer is not code-signed: choose *More info* → *Run anyway*.
