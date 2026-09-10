@@ -9,7 +9,10 @@ import it.touchinformatica.xmleditor.util.XsdFolderManager;
 import it.touchinformatica.xmleditor.view.*;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.layout.GridPane;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -411,7 +414,7 @@ public class MainController {
                     logPane.log(I18n.t("log.xsdFolderEmpty"), "warn");
                     return;
                 }
-                xsdToUse = showXsdPickerDialog(available);
+                xsdToUse = showXsdPickerDialog(available, detectDocumentRoot(editorPane.getText()));
                 if (xsdToUse == null) return; // annullato dall'utente
             }
         }
@@ -506,25 +509,96 @@ public class MainController {
     }
 
     /**
-     * Mostra un ChoiceDialog per scegliere tra gli XSD disponibili nella cartella.
-     * Chiamato quando non c'è corrispondenza automatica per nome.
+     * Chiede quale schema usare quando nessuno corrisponde al documento.
      *
-     * @return path scelto dall'utente, o null se ha annullato
+     * <p>Offre gli schemi della cartella configurata, ma soprattutto permette di
+     * prenderne uno da qualsiasi altra posizione: se il documento è di un formato
+     * estraneo alla cartella — una fattura elettronica in una cartella di tracciati
+     * bancari — nessuna voce dell'elenco è quella giusta, e obbligare a sceglierne
+     * una porta solo a validare contro lo schema sbagliato.</p>
+     *
+     * <p>Per lo stesso motivo nessuna voce è preselezionata e OK resta disattivato
+     * finché non si sceglie davvero.</p>
+     *
+     * @return schema scelto, o null se l'utente ha annullato
      */
-    private Path showXsdPickerDialog(List<Path> available) {
-        // Costruiamo le label mostrate all'utente (solo il nome file)
-        List<String> names = available.stream()
-            .map(p -> p.getFileName().toString())
-            .toList();
-
-        ChoiceDialog<String> dialog = new ChoiceDialog<>(names.get(0), names);
+    private Path showXsdPickerDialog(List<Path> available, XsdFolderManager.DocumentRoot root) {
+        Dialog<Path> dialog = new Dialog<>();
+        dialog.initOwner(owner());
         dialog.setTitle(I18n.t("dialog.xsdPicker.title"));
         dialog.setHeaderText(I18n.t("dialog.xsdPicker.header"));
-        dialog.setContentText(I18n.t("dialog.xsdPicker.content"));
 
-        return dialog.showAndWait()
-            .map(chosen -> available.get(names.indexOf(chosen)))
-            .orElse(null);
+        ButtonType btnOk = new ButtonType(I18n.t("dialog.xsdPicker.use"), ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().setAll(btnOk,
+            new ButtonType(I18n.t("dialog.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE));
+
+        ComboBox<Path> combo = new ComboBox<>();
+        combo.getItems().setAll(available);
+        combo.setPromptText(I18n.t("dialog.xsdPicker.choose"));
+        combo.setMaxWidth(Double.MAX_VALUE);
+        combo.setCellFactory(cb -> new ListCell<>() {
+            @Override protected void updateItem(Path item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.getFileName().toString());
+            }
+        });
+        combo.setButtonCell(combo.getCellFactory().call(null));
+
+        // Uno schema esterno scelto con Sfoglia vince sulla tendina
+        final Path[] browsed = new Path[1];
+
+        Button btnBrowse = new Button(I18n.t("dialog.xsdPicker.browse"));
+        btnBrowse.setOnAction(e -> {
+            FileChooser fc = new FileChooser();
+            fc.setTitle(I18n.t("filechooser.loadXsd"));
+            fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(I18n.t("filter.xsd"), "*.xsd"));
+            if (currentDoc != null && currentDoc.getFilePath() != null) {
+                File parent = currentDoc.getFilePath().toAbsolutePath().getParent().toFile();
+                if (parent.isDirectory()) fc.setInitialDirectory(parent);
+            }
+            File chosen = fc.showOpenDialog(dialog.getDialogPane().getScene().getWindow());
+            if (chosen != null) {
+                browsed[0] = chosen.toPath();
+                dialog.setResult(browsed[0]);
+                dialog.close();
+            }
+        });
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(8);
+        grid.setPadding(new Insets(10, 0, 0, 0));
+
+        int row = 0;
+        if (root != null) {
+            grid.add(new Label(I18n.t("dialog.xsdPicker.rootElement")), 0, row);
+            grid.add(new Label(root.localName()), 1, row++);
+            String ns = (root.namespace() == null || root.namespace().isBlank())
+                ? I18n.t("dialog.xsdPicker.noNamespace") : root.namespace();
+            Label nsLabel = new Label(ns);
+            nsLabel.setWrapText(true);
+            nsLabel.setMaxWidth(420);
+            grid.add(new Label(I18n.t("dialog.xsdPicker.namespace")), 0, row);
+            grid.add(nsLabel, 1, row++);
+        }
+        grid.add(new Label(I18n.t("dialog.xsdPicker.fromFolder")), 0, row);
+        grid.add(combo, 1, row++);
+        grid.add(new Label(I18n.t("dialog.xsdPicker.orElsewhere")), 0, row);
+        grid.add(btnBrowse, 1, row);
+
+        dialog.getDialogPane().setContent(grid);
+        dialog.getDialogPane().setPrefWidth(560);
+
+        // Senza una scelta esplicita non si valida: meglio annullare che usare
+        // uno schema a caso
+        Node okButton = dialog.getDialogPane().lookupButton(btnOk);
+        okButton.setDisable(true);
+        combo.valueProperty().addListener((obs, old, val) -> okButton.setDisable(val == null));
+
+        dialog.setResultConverter(button ->
+            button == btnOk ? combo.getValue() : browsed[0]);
+
+        return dialog.showAndWait().orElse(null);
     }
 
     /** Ritorna la cartella XSD correntemente configurata (per la statusbar in MainStage). */

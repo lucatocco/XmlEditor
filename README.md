@@ -95,7 +95,10 @@ matched against it, from the most reliable criterion to the weakest:
 4. **a schema declaring the document's root element** as a global element; if several
    do, the last by name wins, which is the most recent version
 5. a schema with the same base name as the XML file (`invoice.xml` → `invoice.xsd`)
-6. only if nothing matched, a picker listing every schema in the folder
+6. only if nothing matched, a dialog that shows the document's root element and
+   namespace and lets you pick a schema from the folder **or load one from
+   anywhere else** — nothing is preselected, because a document of a format the
+   folder does not cover has no right answer in that list
 
 The log says which schema was selected and why. For a folder of CBI schemas, where
 file names carry the version (`CBIBdyPaymentRequest.00.04.00.xsd`) and the namespace
