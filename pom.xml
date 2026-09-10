@@ -112,6 +112,12 @@
                 <version>3.2.5</version>
                 <configuration>
                     <useModulePath>false</useModulePath>
+                    <systemPropertyVariables>
+                        <!-- I test non devono toccare le impostazioni reali di chi li
+                             esegue: cartella XSD, lingua, file recenti e ultima
+                             posizione sono persistiti con java.util.prefs. -->
+                        <java.util.prefs.PreferencesFactory>it.touchinformatica.xmleditor.testsupport.InMemoryPreferencesFactory</java.util.prefs.PreferencesFactory>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
 

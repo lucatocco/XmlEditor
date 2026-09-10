@@ -16,6 +16,13 @@ import javafx.stage.Stage;
 import javafx.stage.Window;
 import javafx.util.Duration;
 
+import org.xml.sax.Attributes;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+import org.xml.sax.helpers.DefaultHandler;
+
+import javax.xml.XMLConstants;
+import javax.xml.parsers.SAXParserFactory;
 import java.io.*;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
@@ -71,7 +78,7 @@ public class MainController {
         this.refreshRecentMenu = refreshRecentMenu;
         this.updateTabTitle    = updateTabTitle;
 
-        treePane.setOnNodeSelected(editorPane::goToLine);
+        treePane.setOnNodeSelected(node -> editorPane.selectTagAt(node.line(), node.column()));
 
         // Statusbar: riga:colonna in tempo reale
         editorPane.getCodeArea().caretPositionProperty().addListener((obs, old, pos) -> refreshStatus());
@@ -184,6 +191,7 @@ public class MainController {
                     recentMgr.add(path);
                     refreshRecentMenu.accept(recentMgr.getRecentFiles());
                     rebuildTree(content);
+                    autoSelectSchema(content, path);
                     int savedLine = lastPosMgr.loadPosition(path);
                     if (savedLine > 1) editorPane.goToLine(savedLine);
                 });
@@ -435,6 +443,65 @@ public class MainController {
                     statusBar.setStatus(I18n.t("status.validationFailed", result.errors().size()));
                 }
             });
+        });
+    }
+
+    /**
+     * Nome e namespace dell'elemento radice del documento.
+     *
+     * <p>Il parser si ferma al primo elemento incontrato: non serve leggere il
+     * resto, e su un documento grande fa la differenza.</p>
+     *
+     * @return la radice, o null se il testo non è XML leggibile
+     */
+    private static XsdFolderManager.DocumentRoot detectDocumentRoot(String xmlText) {
+        if (xmlText == null || xmlText.isBlank()) return null;
+
+        final XsdFolderManager.DocumentRoot[] found = new XsdFolderManager.DocumentRoot[1];
+        class Stop extends SAXException {}
+
+        try {
+            SAXParserFactory factory = SAXParserFactory.newInstance();
+            factory.setNamespaceAware(true);
+            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            factory.newSAXParser().parse(new InputSource(new StringReader(xmlText)),
+                new DefaultHandler() {
+                    @Override
+                    public void startElement(String uri, String localName, String qName, Attributes atts)
+                            throws SAXException {
+                        String name = (localName != null && !localName.isEmpty()) ? localName : qName;
+                        found[0] = new XsdFolderManager.DocumentRoot(name, uri);
+                        throw new Stop();   // la radice basta
+                    }
+                });
+        } catch (Stop e) {
+            // atteso: la radice è stata letta
+        } catch (Exception e) {
+            // documento non ben formato: si prosegue senza radice
+        }
+        return found[0];
+    }
+
+    /**
+     * Cerca lo schema adatto al documento appena aperto e lo imposta come attivo,
+     * così la validazione parte senza doverlo scegliere ogni volta.
+     */
+    private void autoSelectSchema(String content, Path path) {
+        if (!xsdFolderMgr.isConfigured()) return;
+
+        XsdFolderManager.DocumentRoot root = detectDocumentRoot(content);
+        String hint = extractSchemaLocationFilename(content);
+        String fileName = path != null ? path.getFileName().toString() : null;
+
+        xsdFolderMgr.findSchemaFor(root, fileName, hint).ifPresent(match -> {
+            currentXsdPath = match.path();
+            String key = switch (match.kind()) {
+                case SCHEMA_LOCATION -> "log.schemaBySchemaLocation";
+                case NAMESPACE       -> "log.schemaByNamespace";
+                case ROOT_ELEMENT    -> "log.schemaByRootElement";
+                case FILE_NAME       -> "log.schemaByFileName";
+            };
+            logPane.log(I18n.t(key, match.path().getFileName()), "ok");
         });
     }
 

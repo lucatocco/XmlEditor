@@ -73,21 +73,34 @@ yields the same result. Mixed content (`<p>text <b>tag</b> text</p>`), CDATA sec
 subtrees marked `xml:space="preserve"` are left untouched, and the XML declaration is
 rewritten to match the encoding the file will actually be saved with.
 
-**XSD validation** picks the schema in this order:
+**The schema is chosen when the file is opened**, not when you press Validate, so
+validation usually runs without asking anything. The folder is indexed once — every
+schema's `targetNamespace` and the root elements it declares — and the document is
+matched against it, from the most reliable criterion to the weakest:
 
 1. a schema loaded manually for the current session (Load Single XSD)
-2. the file named in the document's `xsi:schemaLocation` / `noNamespaceSchemaLocation`,
-   looked up in the configured XSD folder
-3. a schema with the same base name as the XML file (`invoice.xml` → `invoice.xsd`)
-4. otherwise, a picker listing every schema in the folder
+2. the file named in the document's `xsi:schemaLocation` / `noNamespaceSchemaLocation`
+3. **the schema whose `targetNamespace` is the namespace of the document's root
+   element** — an exact match, version included
+4. **a schema declaring the document's root element** as a global element; if several
+   do, the last by name wins, which is the most recent version
+5. a schema with the same base name as the XML file (`invoice.xml` → `invoice.xsd`)
+6. only if nothing matched, a picker listing every schema in the folder
 
-The XSD folder is remembered across restarts.
+The log says which schema was selected and why. For a folder of CBI schemas, where
+file names carry the version (`CBIBdyPaymentRequest.00.04.00.xsd`) and the namespace
+repeats it (`urn:CBI:xsd:CBIBdyPaymentRequest.00.04.00`), criterion 3 identifies the
+right schema even when the XML file is named after the transaction rather than the
+format. The XSD folder is remembered across restarts.
 
 ### Indicators
 - **Asterisk in the tab title** (`* file.xml`) when there are unsaved changes
 - **Status bar** with current line:column, total lines, encoding and line ending
 - **Confirmation dialog** before closing or replacing a document with unsaved changes
 - **Color-coded log** (green/orange/red) for every operation
+- **Click a node in the tree** → selects that element's opening tag in the editor and
+  scrolls to it, so the cursor lands on the tag you clicked rather than at the start
+  of the line
 - **Click an XSD error** → jumps to the offending line in the editor
 - **Last cursor position** is restored per file
 - **The tree follows your edits**, rebuilt shortly after you stop typing

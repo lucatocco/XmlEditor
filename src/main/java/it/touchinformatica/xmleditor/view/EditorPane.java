@@ -100,6 +100,30 @@ public class EditorPane extends StackPane {
         });
     }
 
+    /**
+     * Porta il cursore sul tag che termina in (riga, colonna) e lo evidenzia.
+     *
+     * <p>Il parser SAX indica la fine del tag di apertura; l'inizio si ritrova
+     * risalendo al {@code <} precedente, così il click sull'albero seleziona
+     * l'intero {@code <elemento attr="…">} invece di fermarsi a inizio riga.</p>
+     */
+    public void selectTagAt(int line, int column) {
+        Platform.runLater(() -> {
+            int paragraph = Math.max(0, line - 1);
+            if (paragraph >= getLineCount()) return;
+
+            int col = Math.max(0, Math.min(column - 1, codeArea.getParagraphLength(paragraph)));
+            int end = codeArea.getAbsolutePosition(paragraph, col);
+            end = Math.max(0, Math.min(end, codeArea.getLength()));
+
+            int start = codeArea.getText().lastIndexOf('<', Math.max(0, end - 1));
+            if (start < 0 || start > end) start = end;
+
+            codeArea.selectRange(start, end);
+            codeArea.requestFollowCaret();
+        });
+    }
+
     public int getLineCount() {
         return ((java.util.List<?>) codeArea.getParagraphs()).size();
     }

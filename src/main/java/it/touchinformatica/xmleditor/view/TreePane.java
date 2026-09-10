@@ -28,7 +28,7 @@ public class TreePane extends VBox {
 
     private final Label title;
     private final TreeView<XmlNode> treeView;
-    private Consumer<Integer> onNodeSelected;
+    private Consumer<XmlNode> onNodeSelected;
 
     public TreePane() {
         title = new Label(I18n.t("panel.tree"));
@@ -42,7 +42,7 @@ public class TreePane extends VBox {
         treeView.getSelectionModel().selectedItemProperty().addListener(
             (obs, old, newItem) -> {
                 if (newItem != null && onNodeSelected != null) {
-                    onNodeSelected.accept(newItem.getValue().line());
+                    onNodeSelected.accept(newItem.getValue());
                 }
             }
         );
@@ -88,7 +88,7 @@ public class TreePane extends VBox {
         title.setText(I18n.t("panel.tree"));
     }
 
-    public void setOnNodeSelected(Consumer<Integer> callback) {
+    public void setOnNodeSelected(Consumer<XmlNode> callback) {
         this.onNodeSelected = callback;
     }
 
@@ -96,7 +96,14 @@ public class TreePane extends VBox {
     // RECORD MODELLO NODO
     // ──────────────────────────────────────────────
 
-    public record XmlNode(String tag, String attrs, int line) {
+    /**
+     * Nodo dell'albero.
+     *
+     * @param line   riga in cui termina il tag di apertura
+     * @param column colonna subito dopo il {@code >} del tag di apertura:
+     *               insieme alla riga individua il punto esatto nel documento
+     */
+    public record XmlNode(String tag, String attrs, int line, int column) {
         @Override public String toString() { return tag; }
     }
 
@@ -121,11 +128,12 @@ public class TreePane extends VBox {
             depth++;
             if (depth > MAX_DEPTH) return;
 
-            int line = locator != null ? locator.getLineNumber() : 0;
+            int line   = locator != null ? locator.getLineNumber()   : 0;
+            int column = locator != null ? locator.getColumnNumber() : 0;
             String tag = (localName != null && !localName.isEmpty()) ? localName : qName;
             String attrsPreview = buildAttrsPreview(atts);
 
-            TreeItem<XmlNode> item = new TreeItem<>(new XmlNode(tag, attrsPreview, line));
+            TreeItem<XmlNode> item = new TreeItem<>(new XmlNode(tag, attrsPreview, line, column));
 
             if (stack.isEmpty()) {
                 root = item;
