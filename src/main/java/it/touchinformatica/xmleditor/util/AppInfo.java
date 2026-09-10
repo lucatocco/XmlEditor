@@ -31,6 +31,11 @@ public final class AppInfo {
         return (v.isBlank() || v.startsWith("${")) ? "sviluppo" : v;
     }
 
+    /** Repository GitHub in forma "utente/progetto", per il controllo aggiornamenti. */
+    public static String repository() {
+        return PROPS.getProperty("repository", "lucatocco/XmlEditor");
+    }
+
     /** Etichetta pronta per titoli e finestre di informazioni, es. "XML Editor v2.0.0". */
     public static String nameAndVersion() {
         return name() + " v" + version();

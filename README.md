@@ -52,6 +52,16 @@ Each tab is an independent session with its own editor, tree, log and document s
 - **Language** — Settings → Language switches the whole interface between
   **English** and **Italiano** immediately, without restarting. The choice is
   remembered; on first run the application follows your system language.
+- **Updates** — at startup the application asks GitHub whether a newer release
+  exists and, if so, shows its release notes with a button that opens the download
+  page. It checks at most once a day, says nothing when there is nothing to say,
+  and stays silent when the network is unavailable. Help → Check for Updates runs
+  the same check on demand and always reports the outcome; Settings → Check for
+  updates at startup turns the automatic one off.
+
+  The application never downloads or installs anything by itself: installing needs
+  administrator rights, and asking for them to self-update would be worse than the
+  problem it solves.
 
 ### View
 - **Word wrap** — toggle in the View menu, remembered per tab

@@ -3,6 +3,7 @@ package it.touchinformatica.xmleditor.view;
 import it.touchinformatica.xmleditor.service.XmlService;
 import it.touchinformatica.xmleditor.util.AppInfo;
 import it.touchinformatica.xmleditor.util.I18n;
+import it.touchinformatica.xmleditor.util.UpdateChecker;
 import it.touchinformatica.xmleditor.util.RecentFilesManager;
 import it.touchinformatica.xmleditor.util.XsdFolderManager;
 import javafx.application.Platform;
@@ -336,16 +337,88 @@ public class MainStage {
             miXsd, miValida
         );
 
-        MenuItem miAbout = menuItem(I18n.t("menu.help.about"), null, this::showAbout);
+        MenuItem miUpdate = menuItem(I18n.t("menu.help.checkUpdates"), null, this::checkForUpdatesManually);
+        MenuItem miAbout  = menuItem(I18n.t("menu.help.about"), null, this::showAbout);
         Menu menuAiuto = new Menu(I18n.t("menu.help"));
-        menuAiuto.getItems().add(miAbout);
+        menuAiuto.getItems().addAll(miUpdate, new SeparatorMenuItem(), miAbout);
 
         refreshRecentMenu(recentMgr.getRecentFiles());
         updateXsdFolderStatus();
         return new MenuBar(menuFile, menuModifica, menuVisualizza, menuXml, buildSettingsMenu(), menuAiuto);
     }
 
-    /** Menu Impostazioni: per ora contiene solo la scelta della lingua. */
+    // ──────────────────────────────────────────────
+    // AGGIORNAMENTI
+    // ──────────────────────────────────────────────
+
+    /**
+     * Controllo silenzioso all'avvio: parla solo se c'è davvero una versione nuova.
+     * Al più una volta al giorno, e solo se l'utente non l'ha disattivato.
+     */
+    private void checkForUpdatesAtStartup() {
+        if (!UpdateChecker.isAutoCheckEnabled() || !UpdateChecker.shouldCheckToday()) return;
+        Thread.ofVirtual().start(() ->
+            UpdateChecker.findNewerRelease().ifPresent(release ->
+                Platform.runLater(() -> showUpdateDialog(release))));
+    }
+
+    /**
+     * Controllo richiesto dal menu: qui l'esito va mostrato sempre, anche quando
+     * non c'è niente di nuovo o la rete manca.
+     */
+    private void checkForUpdatesManually() {
+        statusBar.setStatus(I18n.t("update.checking"));
+        Thread.ofVirtual().start(() -> {
+            var latest = UpdateChecker.fetchLatest();
+            Platform.runLater(() -> {
+                statusBar.setStatus(I18n.t("status.ready"));
+                if (latest.isEmpty()) {
+                    Alert a = new Alert(Alert.AlertType.WARNING);
+                    a.setTitle(I18n.t("update.failed.title"));
+                    a.setHeaderText(I18n.t("update.failed.header"));
+                    a.setContentText(I18n.t("update.failed.content"));
+                    a.showAndWait();
+                } else if (UpdateChecker.compareVersions(latest.get().version(), AppInfo.version()) > 0) {
+                    showUpdateDialog(latest.get());
+                } else {
+                    Alert a = new Alert(Alert.AlertType.INFORMATION);
+                    a.setTitle(I18n.t("update.upToDate.title"));
+                    a.setHeaderText(I18n.t("update.upToDate.header"));
+                    a.setContentText(I18n.t("update.upToDate.content", AppInfo.version()));
+                    a.showAndWait();
+                }
+            });
+        });
+    }
+
+    /** Mostra la nuova versione con le sue note e il collegamento al download. */
+    private void showUpdateDialog(UpdateChecker.Release release) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.initOwner(stage);
+        alert.setTitle(I18n.t("update.available.title"));
+        alert.setHeaderText(I18n.t("update.available.header", release.name(), AppInfo.version()));
+
+        if (!release.notes().isBlank()) {
+            TextArea notes = new TextArea(release.notes());
+            notes.setEditable(false);
+            notes.setWrapText(true);
+            notes.setPrefRowCount(10);
+            alert.getDialogPane().setContent(notes);
+            alert.getDialogPane().setPrefWidth(620);
+        }
+
+        ButtonType btnDownload = new ButtonType(I18n.t("update.available.download"));
+        ButtonType btnLater    = new ButtonType(I18n.t("update.available.later"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(btnDownload, btnLater);
+
+        alert.showAndWait().ifPresent(choice -> {
+            if (choice == btnDownload && hostServices != null) {
+                hostServices.showDocument(release.pageUrl());
+            }
+        });
+    }
+
+    /** Menu Impostazioni: lingua e controllo aggiornamenti. */
     private Menu buildSettingsMenu() {
         Menu menuLingua = new Menu(I18n.t("menu.settings.language"));
         ToggleGroup gruppo = new ToggleGroup();
@@ -356,8 +429,12 @@ public class MainStage {
             item.setOnAction(e -> changeLanguage(lang.code()));
             menuLingua.getItems().add(item);
         }
+        CheckMenuItem miAutoUpdate = new CheckMenuItem(I18n.t("menu.settings.autoUpdate"));
+        miAutoUpdate.setSelected(UpdateChecker.isAutoCheckEnabled());
+        miAutoUpdate.setOnAction(e -> UpdateChecker.setAutoCheckEnabled(miAutoUpdate.isSelected()));
+
         Menu menuSettings = new Menu(I18n.t("menu.settings"));
-        menuSettings.getItems().add(menuLingua);
+        menuSettings.getItems().addAll(menuLingua, new SeparatorMenuItem(), miAutoUpdate);
         return menuSettings;
     }
 
@@ -548,5 +625,8 @@ public class MainStage {
         return mi;
     }
 
-    public void show() { stage.show(); }
+    public void show() {
+        stage.show();
+        checkForUpdatesAtStartup();
+    }
 }
