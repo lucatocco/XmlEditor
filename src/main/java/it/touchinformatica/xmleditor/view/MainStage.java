@@ -463,26 +463,26 @@ public class MainStage {
 
     private ToolBar buildToolBar() {
         ToolBar bar = new ToolBar(
-            toolBtn(I18n.t("toolbar.newTab"), this::newTab, I18n.t("tooltip.newTab")),
-            toolBtn(I18n.t("toolbar.open"), this::openFile, I18n.t("tooltip.open")),
-            toolBtn(I18n.t("toolbar.save"), () -> withActive(s -> s.getController().saveFile()), I18n.t("tooltip.save")),
+            toolBtn(Icons.NEW_TAB, I18n.t("toolbar.newTab"), this::newTab, I18n.t("tooltip.newTab")),
+            toolBtn(Icons.OPEN, I18n.t("toolbar.open"), this::openFile, I18n.t("tooltip.open")),
+            toolBtn(Icons.SAVE, I18n.t("toolbar.save"), () -> withActive(s -> s.getController().saveFile()), I18n.t("tooltip.save")),
             new Separator(Orientation.VERTICAL),
-            toolBtn(I18n.t("toolbar.undo"), () -> withActive(s -> s.getEditorPane().undo()), I18n.t("tooltip.undo")),
-            toolBtn(I18n.t("toolbar.redo"), () -> withActive(s -> s.getEditorPane().redo()), I18n.t("tooltip.redo")),
+            toolBtn(Icons.UNDO, I18n.t("toolbar.undo"), () -> withActive(s -> s.getEditorPane().undo()), I18n.t("tooltip.undo")),
+            toolBtn(Icons.REDO, I18n.t("toolbar.redo"), () -> withActive(s -> s.getEditorPane().redo()), I18n.t("tooltip.redo")),
             new Separator(Orientation.VERTICAL),
-            toolBtn(I18n.t("toolbar.prettyPrint"), () -> withActive(s -> s.getController().prettyPrint()), I18n.t("tooltip.prettyPrint")),
-            toolBtn(I18n.t("toolbar.loadXsd"), () -> withActive(s -> s.getController().loadXsd()), I18n.t("tooltip.loadXsd")),
-            toolBtn(I18n.t("toolbar.validate"), () -> withActive(s -> s.getController().validate()), I18n.t("tooltip.validate")),
+            toolBtn(Icons.FORMAT, I18n.t("toolbar.prettyPrint"), () -> withActive(s -> s.getController().prettyPrint()), I18n.t("tooltip.prettyPrint")),
+            toolBtn(Icons.SCHEMA, I18n.t("toolbar.loadXsd"), () -> withActive(s -> s.getController().loadXsd()), I18n.t("tooltip.loadXsd")),
+            toolBtn(Icons.VALIDATE, I18n.t("toolbar.validate"), () -> withActive(s -> s.getController().validate()), I18n.t("tooltip.validate")),
             new Separator(Orientation.VERTICAL),
-            toolBtn(I18n.t("toolbar.find"), () -> withActive(s -> s.getController().toggleSearch()), I18n.t("tooltip.find")),
-            toolBtn(I18n.t("toolbar.line"), () -> withActive(s -> s.getController().showGoToLine()), I18n.t("tooltip.goToLine"))
+            toolBtn(Icons.FIND, I18n.t("toolbar.find"), () -> withActive(s -> s.getController().toggleSearch()), I18n.t("tooltip.find")),
+            toolBtn(Icons.LINE, I18n.t("toolbar.line"), () -> withActive(s -> s.getController().showGoToLine()), I18n.t("tooltip.goToLine"))
         );
         bar.getStyleClass().add("main-toolbar");
         return bar;
     }
 
-    private Button toolBtn(String text, Runnable action, String tooltip) {
-        Button b = new Button(text);
+    private Button toolBtn(String iconPath, String text, Runnable action, String tooltip) {
+        Button b = new Button(text, Icons.of(iconPath));
         b.setTooltip(new Tooltip(tooltip));
         b.setOnAction(e -> action.run());
         b.getStyleClass().add("toolbar-btn");

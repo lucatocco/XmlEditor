@@ -56,3 +56,15 @@
 .tab-pane .tab-content-area {
     -fx-padding: 0;
 }
+
+/* Icone della toolbar: forme vettoriali, colorate come il testo del pulsante.
+   Le emoji non sono utilizzabili perché JavaFX non disegna i font a colori. */
+.toolbar-icon {
+    -fx-background-color: -fx-text-base-color;
+}
+.toolbar-btn {
+    -fx-graphic-text-gap: 6;
+}
+.toolbar-btn:disabled .toolbar-icon {
+    -fx-opacity: 0.4;
+}
