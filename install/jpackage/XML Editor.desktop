@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=APPLICATION_NAME
+Comment=APPLICATION_DESCRIPTION
+Exec=APPLICATION_LAUNCHER %f
+Icon=APPLICATION_ICON
+Terminal=false
+Type=Application
+Categories=DEPLOY_BUNDLE_CATEGORY
+Keywords=xml;xsd;editor;text;
+StartupNotify=true
+StartupWMClass=XmlEditor
+DESKTOP_MIMES

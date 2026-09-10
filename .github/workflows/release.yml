@@ -30,34 +30,41 @@ jobs:
           fi
 
   # Riusa lo stesso identico workflow del build quotidiano: nessuna duplicazione
-  build-msi:
+  build:
     needs: verifica-versione
-    uses: ./.github/workflows/build-msi.yml
+    uses: ./.github/workflows/build-packages.yml
 
   pubblica:
-    needs: build-msi
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Scarica l'MSI prodotto dal build
+      - name: Scarica i pacchetti prodotti dal build
         uses: actions/download-artifact@v4
         with:
-          name: XML-Editor-MSI
+          pattern: XML-Editor-*
+          merge-multiple: true
           path: dist
 
-      - name: Crea la GitHub Release con l'installer allegato
+      - name: Crea la GitHub Release con gli installer allegati
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           ls -la dist/
-          # Se la release esiste già (re-run del workflow) si aggiorna l'allegato
+          # Entrambi i pacchetti devono esserci: una release monca è peggio
+          # di una release fallita, perché sembra completa
+          [ -n "$(ls dist/*.msi 2>/dev/null)" ] || { echo "::error::MSI mancante"; exit 1; }
+          [ -n "$(ls dist/*.deb 2>/dev/null)" ] || { echo "::error::DEB mancante"; exit 1; }
+
+          # Se la release esiste già (re-run del workflow) si aggiornano gli allegati
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME già presente: aggiorno l'installer"
-            gh release upload "$GITHUB_REF_NAME" dist/*.msi --clobber
+            echo "Release $GITHUB_REF_NAME già presente: aggiorno gli installer"
+            gh release upload "$GITHUB_REF_NAME" dist/*.msi dist/*.deb --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/*.msi \
+            gh release create "$GITHUB_REF_NAME" dist/*.msi dist/*.deb \
               --title "XML Editor $GITHUB_REF_NAME" \
               --generate-notes
           fi

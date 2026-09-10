@@ -1,0 +1,209 @@
+name: Build packages
+
+on:
+  # Avvio manuale dalla pagina Actions di GitHub
+  workflow_dispatch:
+  # Richiamabile da altri workflow (lo usa release.yml sui tag)
+  workflow_call:
+  # Oppure automatico su ogni push su main
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  # ──────────────────────────────────────────────
+  # WINDOWS — installer MSI
+  # ──────────────────────────────────────────────
+  msi:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('pom.xml') }}
+
+      - name: Maven build e test (profilo Windows)
+        run: mvn clean package -q -P windows
+
+      # WiX Toolset — già pre-installato su windows-latest, aggiungi solo al PATH
+      - name: Add WiX to PATH
+        shell: pwsh
+        run: |
+          $wixDir = Get-ChildItem "C:\Program Files (x86)" -Filter "WiX Toolset*" |
+                    Sort-Object Name -Descending | Select-Object -First 1
+          if ($wixDir) {
+            echo "$($wixDir.FullName)\bin" | Out-File -Append -FilePath $env:GITHUB_PATH
+            Write-Host "WiX trovato: $($wixDir.FullName)"
+          } else {
+            choco install wixtoolset -y --no-progress
+            echo "C:\Program Files (x86)\WiX Toolset v3.14\bin" | Out-File -Append -FilePath $env:GITHUB_PATH
+          }
+
+      - name: Build MSI con jpackage
+        shell: pwsh
+        run: |
+          # Versione: unica fonte di verità è pom.xml
+          $version   = ([xml](Get-Content "pom.xml")).project.version
+          if (-not $version) { Write-Error "Versione non leggibile da pom.xml"; exit 1 }
+          Write-Host "Versione da pom.xml: $version"
+          $jarName   = "XmlEditor-$version.jar"
+          $inputDir  = "target\jpackage-input"
+          $outputDir = "target\installer"
+
+          New-Item -ItemType Directory -Force $inputDir  | Out-Null
+          New-Item -ItemType Directory -Force $outputDir | Out-Null
+          Copy-Item "target\$jarName" "$inputDir\"
+
+          $iconArgs = @()
+          if (Test-Path "install\xmleditor.ico") {
+            $iconArgs = @("--icon", "install\xmleditor.ico")
+          }
+
+          & jpackage `
+            --type         msi `
+            --name         "XML Editor" `
+            --app-version  $version `
+            --vendor       "Touch Informatica S.r.l.s." `
+            --description  "Editor XML con syntax highlighting e validazione XSD" `
+            --input        $inputDir `
+            --main-jar     $jarName `
+            --main-class   it.touchinformatica.xmleditor.MainApp `
+            --module-path  "target\javafx-libs" `
+            --add-modules  "javafx.controls" `
+            --java-options "-Dfile.encoding=UTF-8" `
+            --java-options "-Dsun.stdout.encoding=UTF-8" `
+            --java-options "--add-opens=javafx.graphics/com.sun.glass.ui=ALL-UNNAMED" `
+            --java-options "--add-opens=javafx.base/com.sun.javafx.runtime=ALL-UNNAMED" `
+            --dest         $outputDir `
+            --win-menu `
+            --win-shortcut `
+            --win-dir-chooser `
+            --win-menu-group "Touch Informatica" `
+            --win-upgrade-uuid "a3f1e2d4-7b6c-4e8a-9d2f-1c3b5a7e9f0d" `
+            @iconArgs
+
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+          $msi = Get-ChildItem "$outputDir\*.msi" | Select-Object -First 1
+          Write-Host "MSI generato: $($msi.Name) ($([math]::Round($msi.Length/1MB,1)) MB)"
+
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: XML-Editor-MSI
+          path: target/installer/*.msi
+          retention-days: 30
+
+  # ──────────────────────────────────────────────
+  # LINUX — pacchetto DEB con voce nel menu applicazioni
+  # ──────────────────────────────────────────────
+  deb:
+    # Volutamente 22.04 e non ubuntu-latest: jpackage ricava le dipendenze dalle
+    # librerie del runner, e su 24.04 diventano i pacchetti "t64" che non esistono
+    # sulle distribuzioni precedenti. Costruendo qui il .deb si installa su
+    # Ubuntu 22.04 e successive, Debian 12 e Linux Mint 21/22.
+    # Se GitHub ritira questo runner: passare a ubuntu-latest, perdendo però
+    # la compatibilità con le distribuzioni più vecchie.
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('pom.xml') }}
+
+      - name: Maven build e test (profilo Linux)
+        run: mvn clean package -q -P linux
+
+      - name: Strumenti per il pacchetto DEB
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fakeroot binutils
+
+      - name: Build DEB con jpackage
+        run: |
+          set -euo pipefail
+          # Versione: unica fonte di verità è pom.xml
+          VERSION=$(sed -n 's|^[[:space:]]*<version>\(.*\)</version>.*|\1|p' pom.xml | head -1)
+          [ -n "$VERSION" ] || { echo "::error::Versione non leggibile da pom.xml"; exit 1; }
+          echo "Versione da pom.xml: $VERSION"
+
+          INPUT=target/jpackage-input
+          OUT=target/installer
+          mkdir -p "$INPUT" "$OUT"
+          cp "target/XmlEditor-${VERSION}.jar" "$INPUT/"
+
+          jpackage \
+            --type         deb \
+            --name         "XML Editor" \
+            --app-version  "$VERSION" \
+            --vendor       "Touch Informatica S.r.l.s." \
+            --description  "XML file editor with syntax highlighting and XSD validation" \
+            --input        "$INPUT" \
+            --main-jar     "XmlEditor-${VERSION}.jar" \
+            --main-class   it.touchinformatica.xmleditor.MainApp \
+            --module-path  target/javafx-libs \
+            --add-modules  javafx.controls \
+            --java-options "-Dfile.encoding=UTF-8" \
+            --icon         install/xmleditor.png \
+            --linux-shortcut \
+            --linux-menu-group "Utility;TextEditor" \
+            --linux-package-name xmleditor \
+            --linux-deb-maintainer lucatocco@gmail.com \
+            --linux-app-category utils \
+            --file-associations install/linux-xml.properties \
+            --file-associations install/linux-xsd.properties \
+            --resource-dir install/jpackage \
+            --dest         "$OUT"
+
+          DEB=$(ls "$OUT"/*.deb | head -1)
+          echo "DEB generato: $(basename "$DEB") ($(du -h "$DEB" | cut -f1))"
+
+      # La voce nel menu applicazioni è il motivo per cui esiste questo pacchetto:
+      # se manca, meglio accorgersene qui che dopo l'installazione.
+      - name: Verifica la voce nel menu applicazioni
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -qq desktop-file-utils
+          DEB=$(ls target/installer/*.deb | head -1)
+          mkdir -p target/deb-check
+          dpkg-deb -x "$DEB" target/deb-check
+          DESKTOP=$(find target/deb-check -name '*.desktop' -not -path '*/legal/*' | head -1)
+          [ -n "$DESKTOP" ] || { echo "::error::Nessuna voce .desktop nel pacchetto"; exit 1; }
+          echo "--- $DESKTOP ---"; cat "$DESKTOP"
+          desktop-file-validate "$DESKTOP"
+          grep -q '^Name=XML Editor$'        "$DESKTOP" || { echo "::error::Name mancante"; exit 1; }
+          grep -q '^Categories=.*Utility'    "$DESKTOP" || { echo "::error::Categoria di menu mancante"; exit 1; }
+          grep -q '%f'                       "$DESKTOP" || { echo "::error::Exec senza %f: il doppio clic su un file non lo aprirebbe"; exit 1; }
+          grep -q '^MimeType=.*application/xml' "$DESKTOP" || { echo "::error::Associazione ai file XML mancante"; exit 1; }
+          dpkg-deb --control "$DEB" target/deb-control
+          grep -q 'xdg-desktop-menu install' target/deb-control/postinst \
+            || { echo "::error::Il postinst non registra la voce di menu"; exit 1; }
+          echo "✔ voce di menu, icona e associazioni presenti e valide"
+
+      - name: Upload DEB
+        uses: actions/upload-artifact@v4
+        with:
+          name: XML-Editor-DEB
+          path: target/installer/*.deb
+          retention-days: 30

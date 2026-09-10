@@ -102,15 +102,20 @@ The XSD folder is remembered across restarts.
 XmlEditor/
 ├── pom.xml                       ← single source of truth for the version
 ├── install/
-│   ├── install.sh                ← Linux install (builds, installs, desktop entry)
+│   ├── build-deb.sh              ← local DEB build with jpackage
+│   ├── build-msi.ps1             ← local MSI build with jpackage
+│   ├── install.sh                ← build from source and install (Linux)
 │   ├── uninstall.sh
 │   ├── install-windows.ps1
-│   ├── build-msi.ps1             ← local MSI build with jpackage
 │   ├── bump-version.sh           ← version bump + git tag + release
+│   ├── jpackage/                 ← desktop entry template used by jpackage
+│   ├── linux-xml.properties      ← .xml file association
+│   ├── linux-xsd.properties      ← .xsd file association
 │   ├── xmleditor.desktop
+│   ├── xmleditor.png             ← icon for the Linux package
 │   └── xmleditor.svg
 ├── .github/workflows/
-│   ├── build-msi.yml             ← MSI build (also reusable)
+│   ├── build-packages.yml        ← MSI and DEB builds (also reusable)
 │   └── release.yml               ← publishes a GitHub Release on every v* tag
 └── src/main/
     ├── java/
@@ -173,21 +178,33 @@ the MSI is built.
 
 ## Installation
 
-**Linux (Mint / Ubuntu)** — builds, installs to `/opt/xmleditor` and registers the
-desktop entry:
+Ready-made installers for both platforms are attached to every
+[release](https://github.com/lucatocco/XmlEditor/releases). They bundle a Java
+runtime, so **Java does not need to be installed** on the target machine.
+
+**Linux** — download the `.deb` and install it:
 
 ```bash
-./install/install.sh
-./install/uninstall.sh   # to remove it
+sudo apt install ./xmleditor_<version>_amd64.deb
+sudo apt remove xmleditor            # to remove it
 ```
 
-**Windows** — either run the installer script, or build an MSI with jpackage
-(requires the WiX Toolset):
+The application then appears among the installed applications, under Accessories,
+and opens `.xml` and `.xsd` files on double click. The package is built on Ubuntu
+22.04, so it installs on Ubuntu 22.04 and later, Debian 12 and Linux Mint 21/22.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File install\install-windows.ps1
-powershell -ExecutionPolicy Bypass -File install\build-msi.ps1
+**Windows** — download the `.msi` and run it. Windows shows a SmartScreen warning
+because the installer is not code-signed: choose *More info* → *Run anyway*.
+
+### Building the packages yourself
+
+```bash
+./install/build-deb.sh                                              # Linux, needs fakeroot
+powershell -ExecutionPolicy Bypass -File install\build-msi.ps1       # Windows, needs WiX
 ```
+
+`install/install.sh` is still there to build from source and install into
+`/opt/xmleditor`; it requires JDK 21 and Maven on the machine.
 
 ---
 
@@ -203,7 +220,9 @@ change:
 
 This updates `pom.xml`, commits, creates the `v2.1.0` tag and pushes it. The tag triggers
 `.github/workflows/release.yml`, which checks that the tag matches the version in
-`pom.xml`, builds the MSI and publishes a GitHub Release with the installer attached.
+`pom.xml`, builds the Windows and Linux packages in parallel, and publishes a GitHub
+Release with both installers attached. The Linux job also asserts that the package
+carries a valid desktop entry, so a release can never ship without its menu shortcut.
 
 Without `--push` nothing leaves your machine: the script prints the commands to run.
 
