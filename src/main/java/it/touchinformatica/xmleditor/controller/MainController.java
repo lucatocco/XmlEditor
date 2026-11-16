@@ -433,12 +433,18 @@ public class MainController {
                 if (result.valid()) {
                     logPane.log(I18n.t("log.valid", finalXsd.getFileName()), "ok");
                     statusBar.setStatus(I18n.t("status.validationOk"));
+                } else if (result.schemaBroken()) {
+                    // Righe e colonne sono dei file XSD: non si salta nel documento
+                    logPane.log(I18n.t("log.schemaInvalid", finalXsd.getFileName()), "error");
+                    result.errors().forEach(err ->
+                        logPane.log(describeSchemaProblem(err), err.fatal() ? "error" : "warn"));
+                    statusBar.setStatus(I18n.t("status.schemaInvalid"));
                 } else {
                     logPane.log(I18n.t("log.validationFailed",
                         finalXsd.getFileName(), result.errors().size()), "error");
                     result.errors().forEach(err ->
                         logPane.log(I18n.t("log.validationError",
-                            I18n.t(err.fatal() ? "error.fatal" : "error.error"),
+                            severityLabel(err.severity()),
                             err.line(), err.column(), err.message()), "error")
                     );
                     if (!result.errors().isEmpty())
@@ -447,6 +453,23 @@ public class MainController {
                 }
             });
         });
+    }
+
+    private static String severityLabel(XmlService.Severity severity) {
+        return I18n.t(switch (severity) {
+            case WARNING -> "error.warning";
+            case ERROR   -> "error.error";
+            case FATAL   -> "error.fatal";
+        });
+    }
+
+    /** Riga di log per un problema dello schema: file XSD, posizione e messaggio. */
+    private static String describeSchemaProblem(XmlService.ValidationError err) {
+        String level = I18n.t(err.fatal() ? "error.error" : "error.warning");
+        return err.line() > 0
+            ? I18n.t("log.schemaProblem", level, err.schemaFile(),
+                String.valueOf(err.line()), String.valueOf(err.column()), err.message())
+            : I18n.t("log.schemaProblemNoPos", level, err.schemaFile(), err.message());
     }
 
     /**

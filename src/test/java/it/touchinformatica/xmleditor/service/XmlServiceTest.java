@@ -229,6 +229,129 @@ class XmlServiceTest {
 
             assertFalse(result.valid());
             assertTrue(result.errors().get(0).fatal());
+            assertTrue(result.schemaBroken());
+        }
+
+        // Struttura dei tracciati SDD con intestazione propria: uno schema
+        // "contenitore" con namespace personalizzato che importa un tracciato ISO
+        private static final String CUSTOM_NS = "urn:PainSDDfh:xsd:$PainSDDfh";
+        private static final String ISO_NS    = "urn:iso:std:iso:20022:tech:xsd:pain.008.001.04";
+
+        private static String wrapperSchema(String importedType) {
+            return """
+                <?xml version="1.0" encoding="utf-8"?>
+                <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                           xmlns:ns1="%2$s" xmlns:fh="%1$s"
+                           targetNamespace="%1$s" elementFormDefault="qualified">
+                  <xs:import schemaLocation="iso.xsd" namespace="%2$s"/>
+                  <xs:element name="PainSDDfh">
+                    <xs:complexType>
+                      <xs:sequence>
+                        <xs:element name="FileRef" type="xs:string"/>
+                        <xs:element name="CstmrDrctDbtInitn" type="ns1:%3$s"/>
+                      </xs:sequence>
+                    </xs:complexType>
+                  </xs:element>
+                </xs:schema>
+                """.formatted(CUSTOM_NS, ISO_NS, importedType);
+        }
+
+        private static String isoSchema(String body) {
+            return """
+                <?xml version="1.0" encoding="utf-8"?>
+                <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                           targetNamespace="%s" elementFormDefault="qualified">
+                  %s
+                </xs:schema>
+                """.formatted(ISO_NS, body);
+        }
+
+        private static final String ISO_TYPE = """
+            <xs:complexType name="CustomerDirectDebitInitiationV04">
+                <xs:sequence><xs:element name="MsgId" type="xs:string"/></xs:sequence>
+              </xs:complexType>""";
+
+        private static final String CUSTOM_NS_DOCUMENT = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <AA:PainSDDfh xmlns:AA="urn:PainSDDfh:xsd:$PainSDDfh"
+                          xmlns:AB="urn:iso:std:iso:20022:tech:xsd:pain.008.001.04">
+              <AA:FileRef>18515</AA:FileRef>
+              <AA:CstmrDrctDbtInitn><AB:MsgId>PAIN008-77IVA</AB:MsgId></AA:CstmrDrctDbtInitn>
+            </AA:PainSDDfh>
+            """;
+
+        @Test
+        @DisplayName("un namespace personalizzato con schema importato si valida")
+        void validatesCustomNamespaceWithImport(@TempDir Path dir) throws Exception {
+            Path wrapper = dir.resolve("PainSDDfh.xsd");
+            Files.writeString(wrapper, wrapperSchema("CustomerDirectDebitInitiationV04"));
+            Files.writeString(dir.resolve("iso.xsd"), isoSchema(ISO_TYPE));
+
+            var result = service.validate(CUSTOM_NS_DOCUMENT, wrapper);
+
+            assertTrue(result.valid(), () -> "errori inattesi: " + result.errors());
+        }
+
+        @Test
+        @DisplayName("un import mancante viene segnalato come causa, non solo i tipi non risolti")
+        void reportsMissingImportAsCause(@TempDir Path dir) throws Exception {
+            Path wrapper = dir.resolve("PainSDDfh.xsd");
+            Files.writeString(wrapper, wrapperSchema("CustomerDirectDebitInitiationV04"));
+            // iso.xsd non c'è
+
+            var result = service.validate(CUSTOM_NS_DOCUMENT, wrapper);
+
+            assertFalse(result.valid());
+            assertTrue(result.schemaBroken());
+            var first = result.errors().get(0);
+            assertEquals(XmlService.Severity.WARNING, first.severity());
+            assertTrue(first.message().contains("iso.xsd"), first::message);
+            assertEquals("PainSDDfh.xsd", first.schemaFile());
+            assertEquals(5, first.line(), "deve indicare la riga dell'import");
+            assertTrue(result.errors().stream().skip(1).allMatch(XmlService.ValidationError::fatal),
+                () -> "il tipo non risolto deve seguire come errore: " + result.errors());
+        }
+
+        @Test
+        @DisplayName("un errore in uno schema importato indica quel file")
+        void reportsErrorsInImportedSchema(@TempDir Path dir) throws Exception {
+            Path wrapper = dir.resolve("PainSDDfh.xsd");
+            Files.writeString(wrapper, wrapperSchema("CustomerDirectDebitInitiationV04"));
+            Files.writeString(dir.resolve("iso.xsd"),
+                isoSchema(ISO_TYPE.replace("xs:string", "xs:inesistente")));
+
+            var result = service.validate(CUSTOM_NS_DOCUMENT, wrapper);
+
+            assertTrue(result.schemaBroken());
+            assertTrue(result.errors().stream().anyMatch(e -> "iso.xsd".equals(e.schemaFile())),
+                () -> "errore non attribuito a iso.xsd: " + result.errors());
+        }
+
+        @Test
+        @DisplayName("un tipo che lo schema importato non definisce rende lo schema non valido")
+        void reportsUnknownImportedType(@TempDir Path dir) throws Exception {
+            Path wrapper = dir.resolve("PainSDDfh.xsd");
+            Files.writeString(wrapper, wrapperSchema("CustomerCreditTransferInitiationV03"));
+            Files.writeString(dir.resolve("iso.xsd"), isoSchema(ISO_TYPE));
+
+            var result = service.validate(CUSTOM_NS_DOCUMENT, wrapper);
+
+            assertTrue(result.schemaBroken());
+            assertTrue(result.errors().stream().anyMatch(e ->
+                    e.fatal() && e.message().contains("CustomerCreditTransferInitiationV03")),
+                () -> "errori: " + result.errors());
+        }
+
+        @Test
+        @DisplayName("un documento non ben formato dà un solo errore, attribuito al documento")
+        void reportsMalformedDocumentOnce(@TempDir Path dir) throws Exception {
+            var result = service.validate("<nota><testo>x</nota>", writeSchema(dir));
+
+            assertFalse(result.valid());
+            assertFalse(result.schemaBroken());
+            assertEquals(1, result.errors().size(), () -> "errori: " + result.errors());
+            assertTrue(result.errors().get(0).fatal());
+            assertTrue(result.errors().get(0).line() > 0);
         }
     }
 }

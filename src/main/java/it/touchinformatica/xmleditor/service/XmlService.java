@@ -4,6 +4,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.ErrorHandler;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
@@ -19,6 +20,7 @@ import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 import javax.xml.validation.Validator;
 import java.io.*;
+import java.net.URI;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -165,53 +167,149 @@ public class XmlService {
         public static ValidationResult ok() {
             return new ValidationResult(true, List.of());
         }
+
+        /**
+         * Indica se a non funzionare è lo schema stesso: in quel caso il documento
+         * non è stato validato e gli errori riguardano i file XSD, non il documento.
+         */
+        public boolean schemaBroken() {
+            return errors.stream().anyMatch(ValidationError::inSchema);
+        }
+    }
+
+    /** Gravità di un problema di validazione. */
+    public enum Severity { WARNING, ERROR, FATAL }
+
+    /**
+     * Singolo problema di validazione con riga e colonna.
+     *
+     * @param line       riga, oppure 0 se non nota
+     * @param column     colonna, oppure 0 se non nota
+     * @param schemaFile nome del file XSD in cui si trova il problema (lo schema
+     *                   scelto o uno da esso importato), oppure null se il problema
+     *                   è nel documento: riga e colonna si riferiscono a quel file
+     */
+    public record ValidationError(int line, int column, String message,
+                                  Severity severity, String schemaFile) {
+
+        public boolean fatal() {
+            return severity == Severity.FATAL;
+        }
+
+        public boolean inSchema() {
+            return schemaFile != null;
+        }
     }
 
     /**
-     * Singolo errore di validazione con riga e colonna.
-     */
-    public record ValidationError(int line, int column, String message, boolean fatal) {}
-
-    /**
      * Valida il testo XML contro lo schema XSD fornito.
+     *
+     * <p>Prima si compila lo schema raccogliendone tutti i problemi, compresi gli
+     * avvisi: un {@code xs:import} di un file che non c'è è solo un avviso, ma è
+     * la causa dei «tipo non risolto» che seguono e senza di esso quegli errori
+     * sono incomprensibili. Se lo schema ha errori il documento non viene
+     * validato: il risultato contro uno schema incompleto non avrebbe senso.</p>
      *
      * @param xmlText   testo XML da validare
      * @param xsdPath   path del file .xsd
      * @return ValidationResult con lista errori
      */
     public ValidationResult validate(String xmlText, Path xsdPath) {
-        List<ValidationError> errors = new ArrayList<>();
+        String xsdName = xsdPath.getFileName() != null
+            ? xsdPath.getFileName().toString() : xsdPath.toString();
 
+        // 1. Compilazione dello schema
+        List<ValidationError> schemaProblems = new ArrayList<>();
+        Schema schema;
         try {
             SchemaFactory schemaFactory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
-            Schema schema = schemaFactory.newSchema(xsdPath.toFile());
-            Validator validator = schema.newValidator();
-
-            // Raccoglie tutti gli errori senza fermarsi al primo
-            validator.setErrorHandler(new org.xml.sax.ErrorHandler() {
+            schemaFactory.setErrorHandler(new ErrorHandler() {
                 @Override
                 public void warning(SAXParseException e) {
-                    errors.add(new ValidationError(e.getLineNumber(), e.getColumnNumber(), e.getMessage(), false));
+                    schemaProblems.add(schemaProblem(e, Severity.WARNING, xsdName));
                 }
                 @Override
                 public void error(SAXParseException e) {
-                    errors.add(new ValidationError(e.getLineNumber(), e.getColumnNumber(), e.getMessage(), false));
+                    // Per il documento ogni errore dello schema è bloccante
+                    schemaProblems.add(schemaProblem(e, Severity.FATAL, xsdName));
+                }
+                @Override
+                public void fatalError(SAXParseException e) throws SAXException {
+                    schemaProblems.add(schemaProblem(e, Severity.FATAL, xsdName));
+                    throw e;
+                }
+            });
+            schema = schemaFactory.newSchema(xsdPath.toFile());
+        } catch (SAXException e) {
+            // Di norma è l'errore appena registrato dall'handler
+            if (schemaProblems.stream().noneMatch(ValidationError::fatal)) {
+                schemaProblems.add(new ValidationError(0, 0, e.getMessage(), Severity.FATAL, xsdName));
+            }
+            return new ValidationResult(false, schemaProblems);
+        }
+        if (schemaProblems.stream().anyMatch(ValidationError::fatal)) {
+            return new ValidationResult(false, schemaProblems);
+        }
+
+        // 2. Validazione del documento: raccoglie tutti gli errori senza fermarsi al primo
+        List<ValidationError> errors = new ArrayList<>();
+        try {
+            Validator validator = schema.newValidator();
+            validator.setErrorHandler(new ErrorHandler() {
+                @Override
+                public void warning(SAXParseException e) {
+                    errors.add(documentProblem(e, Severity.WARNING));
+                }
+                @Override
+                public void error(SAXParseException e) {
+                    errors.add(documentProblem(e, Severity.ERROR));
                 }
                 @Override
                 public void fatalError(SAXParseException e) {
-                    errors.add(new ValidationError(e.getLineNumber(), e.getColumnNumber(), e.getMessage(), true));
+                    errors.add(documentProblem(e, Severity.FATAL));
                 }
             });
 
             validator.validate(new StreamSource(new StringReader(xmlText)));
 
-            return errors.isEmpty()
-                ? ValidationResult.ok()
-                : new ValidationResult(false, errors);
-
         } catch (SAXException | IOException e) {
-            errors.add(new ValidationError(0, 0, "Schema error: " + e.getMessage(), true));
-            return new ValidationResult(false, errors);
+            // Un errore fatale (documento non ben formato) è già stato registrato
+            // dall'handler: il parser poi si interrompe comunque con un'eccezione
+            if (errors.stream().noneMatch(ValidationError::fatal)) {
+                errors.add(new ValidationError(0, 0, e.getMessage(), Severity.FATAL, null));
+            }
         }
+
+        return errors.isEmpty()
+            ? ValidationResult.ok()
+            : new ValidationResult(false, errors);
+    }
+
+    private static ValidationError documentProblem(SAXParseException e, Severity severity) {
+        return new ValidationError(Math.max(0, e.getLineNumber()), Math.max(0, e.getColumnNumber()),
+            e.getMessage(), severity, null);
+    }
+
+    private static ValidationError schemaProblem(SAXParseException e, Severity severity, String mainSchema) {
+        return new ValidationError(Math.max(0, e.getLineNumber()), Math.max(0, e.getColumnNumber()),
+            e.getMessage(), severity, schemaFileName(e.getSystemId(), mainSchema));
+    }
+
+    /**
+     * Nome del file XSD a cui si riferisce un problema: può essere lo schema
+     * scelto o uno importato, e conta saperlo per andare a correggerlo.
+     */
+    private static String schemaFileName(String systemId, String fallback) {
+        if (systemId == null || systemId.isBlank()) return fallback;
+        try {
+            String path = URI.create(systemId).getPath();   // decodifica %20 & co.
+            if (path != null) {
+                String name = path.substring(path.lastIndexOf('/') + 1);
+                if (!name.isEmpty()) return name;
+            }
+        } catch (IllegalArgumentException e) {
+            // systemId non è un URI valido: si mostra così com'è
+        }
+        return systemId;
     }
 }
